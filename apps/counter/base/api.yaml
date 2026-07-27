@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: counter-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: counter-api
+  template:
+    metadata:
+      labels:
+        app: counter-api
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: api
+          image: registry.gitlab.com/uet-group1950631/k3s-demo-app/api:bootstrap
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: counter-config
+            - secretRef:
+                name: counter-lab-secret
+          env:
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: counter-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  selector:
+    app: counter-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

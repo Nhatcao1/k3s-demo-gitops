@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: counter-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@gitlab.com:uet-group1950631/k3s-demo-gitops.git
+    targetRevision: main
+    path: argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true

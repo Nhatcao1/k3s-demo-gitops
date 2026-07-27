@@ -1,0 +1,5 @@
+.DS_Store
+.env
+*.rendered.yaml
+*-secret.yaml
+private-key*

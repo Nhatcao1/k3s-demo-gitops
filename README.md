@@ -1,93 +1,115 @@
-# k3s-demo-gitops
+# K3s demo GitOps
 
+Desired Kubernetes state for the visit-counter learning lab.
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/uet-group1950631/k3s-demo-gitops.git
-git branch -M main
-git push -uf origin main
+```text
+k3s-demo-app commit
+  -> GitLab CI builds immutable web/API images
+  -> this repository promotes those image tags
+  -> Argo CD reconciles K3s
 ```
 
-## Integrate with your tools
+Development synchronizes automatically. Production intentionally requires a
+manual Argo CD sync so the promotion boundary remains visible.
 
-* [Set up project integrations](https://gitlab.com/uet-group1950631/k3s-demo-gitops/-/settings/integrations)
+## Layout
 
-## Collaborate with your team
+```text
+apps/counter/base/          reusable Kubernetes resources
+apps/counter/overlays/dev/  development image tags and settings
+apps/counter/overlays/prod/ production image tags and settings
+argocd/                     AppProject and App-of-Apps definitions
+scripts/                    node2 setup and validation helpers
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+The initial image tag in both overlays is `70694d7e`, the first eight characters
+of the application repository commit (matching GitLab's
+`CI_COMMIT_SHORT_SHA`). Wait for that application's GitLab pipeline to publish
+both images before bootstrapping the workloads.
 
-## Test and Deploy
+## 1. Validate on node2
 
-Use the built-in continuous integration in GitLab.
+Requirements: `kubectl`, access to the K3s cluster, and Argo CD installed in the
+`argocd` namespace.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```sh
+./scripts/validate.sh
+```
 
-***
+## 2. Create registry pull secrets
 
-# Editing this README
+Create a read-only GitLab deploy token in the application project with
+`read_registry`, then run:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```sh
+./scripts/create-registry-secrets.sh
+```
 
-## Suggestions for a good README
+The script creates `counter-dev` and `counter-prod`, then creates the
+`gitlab-registry` pull secret in each. Credentials are read interactively and
+are never written to this repository.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## 3. Give Argo CD read access to this private repository
 
-## Name
-Choose a self-explaining name for your project.
+Generate a dedicated key on node2:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```sh
+ssh-keygen -t ed25519 \
+  -C "argocd-k3s-demo-gitops" \
+  -f "$HOME/.ssh/id_ed25519_argocd_gitops"
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Add the `.pub` file as a read-only deploy key in the GitLab GitOps project,
+then register the private key:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```sh
+./scripts/register-argocd-repo.sh \
+  "$HOME/.ssh/id_ed25519_argocd_gitops"
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## 4. Bootstrap the App of Apps
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```sh
+./scripts/bootstrap.sh
+./scripts/status.sh
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+`counter-root` manages the `counter-lab` AppProject plus the development and
+production Applications.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+| Application | Sync behavior |
+|---|---|
+| `counter-root` | automatic, prune, self-heal |
+| `counter-dev` | automatic, prune, self-heal |
+| `counter-prod` | manual |
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## 5. Promote a new application commit
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+After both GitLab image jobs succeed:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```sh
+./scripts/promote-image.sh <application-short-sha> dev
+git add apps/counter/overlays/dev/kustomization.yaml
+git commit -m "Deploy application <application-short-sha> to development"
+git push origin main
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Use `prod` only after the development release is verified. Argo CD will show
+production as OutOfSync until an operator reviews the diff and synchronizes it.
 
-## License
-For open source projects, say how it is licensed.
+## Access through Traefik
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Point the names at a K3s node running the Traefik ServiceLB:
+
+```text
+100.121.1.22 counter-dev.k3s.test
+100.121.1.22 counter-prod.k3s.test
+```
+
+Then open `http://counter-dev.k3s.test`.
+
+## Secret policy
+
+`counter-lab-secret` contains only a meaningless teaching value. Real
+credentials should use an external secret manager, Sealed Secrets, or SOPS and
+must never be committed as plaintext.

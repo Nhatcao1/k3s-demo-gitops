@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: counter-dev
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: counter-lab
+  source:
+    repoURL: git@gitlab.com:uet-group1950631/k3s-demo-gitops.git
+    targetRevision: main
+    path: apps/counter/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: counter-dev
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

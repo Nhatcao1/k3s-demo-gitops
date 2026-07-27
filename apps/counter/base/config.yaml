@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: counter-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+data:
+  APP_NAME: counter-api
+  APP_ENV: base
+---
+# Teaching-only value. Never store a real credential this way.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: counter-lab-secret
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+type: Opaque
+stringData:
+  DEMO_SECRET: lab-only-value

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: counter-lab
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: GitLab CI and K3s Argo CD learning project
+  sourceRepos:
+    - git@gitlab.com:uet-group1950631/k3s-demo-gitops.git
+  destinations:
+    - namespace: counter-dev
+      server: https://kubernetes.default.svc
+    - namespace: counter-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
