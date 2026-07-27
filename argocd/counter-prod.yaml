@@ -8,7 +8,7 @@ metadata:
 spec:
   project: counter-lab
   source:
-    repoURL: git@gitlab.com:uet-group1950631/k3s-demo-gitops.git
+    repoURL: git@gitlab.com:nhatcao99uetwork/k3s-demo-gitops.git
     targetRevision: main
     path: apps/counter/overlays/prod
   destination:

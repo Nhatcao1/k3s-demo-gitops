@@ -7,10 +7,10 @@ resources:
   - ../../base
 
 images:
-  - name: registry.gitlab.com/uet-group1950631/k3s-demo-app/api
-    newTag: 70694d7e
-  - name: registry.gitlab.com/uet-group1950631/k3s-demo-app/web
-    newTag: 70694d7e
+  - name: registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/api
+    newTag: 49367a5c
+  - name: registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/web
+    newTag: 49367a5c
 
 patches:
   - target:

@@ -22,7 +22,7 @@ argocd/                     AppProject and App-of-Apps definitions
 scripts/                    node2 setup and validation helpers
 ```
 
-The initial image tag in both overlays is `70694d7e`, the first eight characters
+The current image tag in both overlays is `49367a5c`, the first eight characters
 of the application repository commit (matching GitLab's
 `CI_COMMIT_SHORT_SHA`). Wait for that application's GitLab pipeline to publish
 both images before bootstrapping the workloads.

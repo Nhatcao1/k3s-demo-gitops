@@ -10,7 +10,7 @@ fi
 
 kubectl -n argocd create secret generic repo-k3s-demo-gitops \
   --from-literal=type=git \
-  --from-literal=url=git@gitlab.com:uet-group1950631/k3s-demo-gitops.git \
+  --from-literal=url=git@gitlab.com:nhatcao99uetwork/k3s-demo-gitops.git \
   --from-file=sshPrivateKey="$private_key" \
   --dry-run=client -o yaml |
   kubectl apply -f -
