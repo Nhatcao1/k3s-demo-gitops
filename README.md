@@ -83,6 +83,41 @@ production Applications.
 | `counter-dev` | automatic, prune, self-heal |
 | `counter-prod` | manual |
 
+## Argo CD UI on node2
+
+The temporary lab endpoint is:
+
+```text
+https://100.121.1.22:18080
+```
+
+Sign in as `admin`. Retrieve the generated initial password:
+
+```sh
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' |
+base64 -d
+echo
+```
+
+The endpoint depends on a port-forward process on node2. Start or restart it
+when port `18080` is not listening:
+
+```sh
+nohup kubectl port-forward \
+  --address=100.121.1.22 \
+  -n argocd \
+  service/argocd-server \
+  18080:443 \
+  > "$HOME/argocd-port-forward.log" 2>&1 &
+```
+
+Verify it with:
+
+```sh
+curl -kI https://100.121.1.22:18080
+```
+
 ## 5. Promote a new application commit
 
 After both GitLab image jobs succeed:
