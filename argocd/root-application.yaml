@@ -1,6 +1,8 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  # Keep the existing resource name during migration so the installed root
+  # Application updates in place instead of creating a second root controller.
   name: counter-root
   namespace: argocd
 spec:

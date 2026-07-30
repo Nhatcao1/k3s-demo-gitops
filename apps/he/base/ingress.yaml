@@ -1,26 +1,19 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: counter
+  name: he-gateway
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   ingressClassName: traefik
   rules:
-    - host: counter.k3s.test
+    - host: he.k3s.test
       http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: counter-api
-                port:
-                  number: 8080
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: counter-web
+                name: he-gateway
                 port:
-                  number: 80
+                  number: 8080

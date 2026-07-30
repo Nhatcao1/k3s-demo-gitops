@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: he-gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: he-gateway
+  template:
+    metadata:
+      labels:
+        app: he-gateway
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: gateway
+          image: registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-gateway:bootstrap
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -m
+            - gateway.app
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: MAX_REQUEST_BYTES
+              value: "1048576"
+            - name: MAX_VECTOR_LENGTH
+              value: "64"
+            - name: MAX_SESSIONS
+              value: "32"
+            - name: MAX_CIPHERTEXTS_PER_SESSION
+              value: "128"
+            - name: MAX_MULTIPLICATIVE_DEPTH
+              value: "8"
+            - name: SESSION_TTL_SECONDS
+              value: "900"
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 256Mi

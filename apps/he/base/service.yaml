@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: he-gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  selector:
+    app: he-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

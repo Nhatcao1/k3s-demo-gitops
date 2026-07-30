@@ -1,18 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: counter-lab
+  name: he-lab
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
-  description: GitLab CI and K3s Argo CD learning project
+  description: Homomorphic encryption GitLab CI and K3s development lab
   sourceRepos:
     - git@gitlab.com:nhatcao99uetwork/k3s-demo-gitops.git
   destinations:
-    - namespace: counter-dev
-      server: https://kubernetes.default.svc
-    - namespace: counter-prod
+    - namespace: he-dev
       server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: ""

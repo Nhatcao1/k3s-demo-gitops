@@ -1,20 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: counter-prod
+  name: he-dev
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
-  project: counter-lab
+  project: he-lab
   source:
     repoURL: git@gitlab.com:nhatcao99uetwork/k3s-demo-gitops.git
     targetRevision: main
-    path: apps/counter/overlays/prod
+    path: apps/he/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: counter-prod
+    namespace: he-dev
   syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
     retry:

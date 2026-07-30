@@ -14,7 +14,7 @@ if [ -z "${REGISTRY_TOKEN:-}" ]; then
   printf "\n"
 fi
 
-for namespace in counter-dev counter-prod; do
+for namespace in he-dev; do
   kubectl create namespace "$namespace" \
     --dry-run=client -o yaml |
     kubectl apply -f -
@@ -28,4 +28,4 @@ for namespace in counter-dev counter-prod; do
 done
 
 unset REGISTRY_TOKEN
-echo "Registry pull secrets are ready in counter-dev and counter-prod."
+echo "Registry pull secret is ready in he-dev."

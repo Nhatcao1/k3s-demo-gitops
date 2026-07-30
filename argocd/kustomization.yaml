@@ -3,5 +3,4 @@ kind: Kustomization
 
 resources:
   - project.yaml
-  - counter-dev.yaml
-  - counter-prod.yaml
+  - he-dev.yaml

@@ -10,21 +10,16 @@ command -v kubectl >/dev/null 2>&1 || {
   exit 1
 }
 
-kubectl kustomize "$repo_dir/apps/counter/overlays/dev" \
-  > "$render_dir/counter-dev.yaml"
-kubectl kustomize "$repo_dir/apps/counter/overlays/prod" \
-  > "$render_dir/counter-prod.yaml"
+kubectl kustomize "$repo_dir/apps/he/overlays/dev" \
+  > "$render_dir/he-dev.yaml"
 kubectl kustomize "$repo_dir/argocd" \
   > "$render_dir/argocd.yaml"
 
-grep -Eq 'api:[0-9a-f]{8,40}' "$render_dir/counter-dev.yaml"
-grep -Eq 'web:[0-9a-f]{8,40}' "$render_dir/counter-dev.yaml"
-grep -q 'counter-dev.k3s.test' "$render_dir/counter-dev.yaml"
-grep -q 'namespace: counter-dev' "$render_dir/counter-dev.yaml"
+grep -Eq 'k3s-demo-app/openfhe-gateway:[0-9a-f]{8,40}' "$render_dir/he-dev.yaml"
+grep -q 'he-dev.k3s.test' "$render_dir/he-dev.yaml"
+grep -q 'namespace: he-dev' "$render_dir/he-dev.yaml"
+grep -q 'name: he-gateway' "$render_dir/he-dev.yaml"
+grep -q 'name: he-dev' "$render_dir/argocd.yaml"
+grep -q 'name: he-lab' "$render_dir/argocd.yaml"
 
-grep -Eq 'api:[0-9a-f]{8,40}' "$render_dir/counter-prod.yaml"
-grep -Eq 'web:[0-9a-f]{8,40}' "$render_dir/counter-prod.yaml"
-grep -q 'counter-prod.k3s.test' "$render_dir/counter-prod.yaml"
-grep -q 'namespace: counter-prod' "$render_dir/counter-prod.yaml"
-
-echo "Kustomize validation passed."
+echo "HE Kustomize validation passed."

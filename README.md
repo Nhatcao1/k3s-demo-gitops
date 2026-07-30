@@ -1,150 +1,101 @@
-# K3s demo GitOps
+# HE K3s GitOps lab
 
-Desired Kubernetes state for the visit-counter learning lab.
+Desired K3s development state for the HE application in the companion GitLab
+repository:
 
 ```text
-k3s-demo-app commit
-  -> GitLab CI builds immutable web/API images
-  -> this repository promotes those image tags
-  -> Argo CD reconciles K3s
+k3s-demo-app HE commit
+  -> GitLab CI tests and builds an immutable image
+  -> this repository promotes that exact commit tag
+  -> Argo CD reconciles he-dev on K3s
 ```
 
-Development synchronizes automatically. Production intentionally requires a
-manual Argo CD sync so the promotion boundary remains visible.
+The old counter application remains available in Git history but is no longer
+part of the desired state.
 
 ## Layout
 
 ```text
-apps/counter/base/          reusable Kubernetes resources
-apps/counter/overlays/dev/  development image tags and settings
-apps/counter/overlays/prod/ production image tags and settings
-argocd/                     AppProject and App-of-Apps definitions
-scripts/                    node2 setup and validation helpers
+apps/he/base/          reusable trusted HE gateway resources
+apps/he/overlays/dev/  development image tag and hostname
+argocd/                he-lab project and he-dev Application
+scripts/               validation, registry, promotion, and status helpers
 ```
 
-The current image tag in both overlays is `49367a5c`, the first eight characters
-of the application repository commit (matching GitLab's
-`CI_COMMIT_SHORT_SHA`). Wait for that application's GitLab pipeline to publish
-both images before bootstrapping the workloads.
+## First deployment order
 
-## 1. Validate on node2
+First commit and push the HE application repository. Its successful default
+branch pipeline publishes:
 
-Requirements: `kubectl`, access to the K3s cluster, and Argo CD installed in the
-`argocd` namespace.
+```text
+registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-gateway:<full-commit-sha>
+```
+
+Promote that full SHA here:
 
 ```sh
+./scripts/promote-he-image.sh <full-k3s-demo-app-commit-sha>
 ./scripts/validate.sh
 ```
 
-## 2. Create registry pull secrets
-
-Create a read-only GitLab deploy token in the application project with
-`read_registry`, then run:
+Create a read-only GitLab deploy token with `read_registry`, then create the
+K3s pull secret:
 
 ```sh
 ./scripts/create-registry-secrets.sh
 ```
 
-The script creates `counter-dev` and `counter-prod`, then creates the
-`gitlab-registry` pull secret in each. Credentials are read interactively and
-are never written to this repository.
+Review, commit, and push the GitOps changes only after the image exists.
 
-## 3. Give Argo CD read access to this private repository
+## Argo CD
 
-Generate a dedicated key on node2:
+Give Argo CD read access to this private GitOps repository:
 
 ```sh
 ssh-keygen -t ed25519 \
-  -C "argocd-k3s-demo-gitops" \
+  -C "argocd-he-gitops" \
   -f "$HOME/.ssh/id_ed25519_argocd_gitops"
-```
 
-Add the `.pub` file as a read-only deploy key in the GitLab GitOps project,
-then register the private key:
-
-```sh
 ./scripts/register-argocd-repo.sh \
   "$HOME/.ssh/id_ed25519_argocd_gitops"
 ```
 
-## 4. Bootstrap the App of Apps
+Bootstrap or update the root application:
 
 ```sh
 ./scripts/bootstrap.sh
 ./scripts/status.sh
 ```
 
-`counter-root` manages the `counter-lab` AppProject plus the development and
-production Applications.
+The installed root Application temporarily keeps its existing Kubernetes name
+`counter-root` so this migration updates it in place instead of creating two
+root controllers. It now manages only `he-lab` and `he-dev`. Both root and
+development applications use automatic sync, pruning, and self-healing.
 
-| Application | Sync behavior |
-|---|---|
-| `counter-root` | automatic, prune, self-heal |
-| `counter-dev` | automatic, prune, self-heal |
-| `counter-prod` | manual |
+## Access
 
-## Argo CD UI on node2
-
-The temporary lab endpoint is:
+Point the development hostname to a K3s node running Traefik:
 
 ```text
-https://100.121.1.22:18080
+100.121.1.22 he-dev.k3s.test
 ```
 
-Sign in as `admin`. Retrieve the generated initial password:
+Verify:
 
 ```sh
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' |
-base64 -d
-echo
+curl http://he-dev.k3s.test/healthz
+curl http://he-dev.k3s.test/v1/capabilities
 ```
 
-The endpoint depends on a port-forward process on node2. Start or restart it
-when port `18080` is not listening:
+The PostSync Job uses `HEClient` against the in-cluster gateway and checks real
+OpenFHE subtraction, addition, multiplication, sum, and mean results. It fails
+the Argo operation when any decrypted result is incorrect.
 
-```sh
-nohup kubectl port-forward \
-  --address=100.121.1.22 \
-  -n argocd \
-  service/argocd-server \
-  18080:443 \
-  > "$HOME/argocd-port-forward.log" 2>&1 &
-```
+## Current scope
 
-Verify it with:
-
-```sh
-curl -kI https://100.121.1.22:18080
-```
-
-## 5. Promote a new application commit
-
-After both GitLab image jobs succeed:
-
-```sh
-./scripts/promote-image.sh <application-short-sha> dev
-git add apps/counter/overlays/dev/kustomization.yaml
-git commit -m "Deploy application <application-short-sha> to development"
-git push origin main
-```
-
-Use `prod` only after the development release is verified. Argo CD will show
-production as OutOfSync until an operator reviews the diff and synchronizes it.
-
-## Access through Traefik
-
-Point the names at a K3s node running the Traefik ServiceLB:
-
-```text
-100.121.1.22 counter-dev.k3s.test
-100.121.1.22 counter-prod.k3s.test
-```
-
-Then open `http://counter-dev.k3s.test`.
-
-## Secret policy
-
-`counter-lab-secret` contains only a meaningless teaching value. Real
-credentials should use an external secret manager, Sealed Secrets, or SOPS and
-must never be committed as plaintext.
+- one trusted gateway replica with in-memory sessions;
+- one immutable image per GitLab application commit;
+- GitLab Container Registry for the K3s lab;
+- add, subtract, multiply, sum, and mean only;
+- no variance, min/max, dot product, or scoring functions;
+- `he_k8s` remains separate for the later production-server path.

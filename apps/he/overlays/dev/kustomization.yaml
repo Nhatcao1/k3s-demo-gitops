@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: he-dev
+
+resources:
+  - ../../base
+
+images:
+  - name: registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-gateway
+    newTag: dacf426f16649ba9c4a709f84c96b299c5932de2
+
+patches:
+  - target:
+      kind: Ingress
+      name: he-gateway
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: he-dev.k3s.test
