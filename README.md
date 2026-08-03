@@ -13,6 +13,20 @@ k3s-demo-app HE commit
 The old counter application remains available in Git history but is no longer
 part of the desired state.
 
+## Next milestone: encrypted-only evaluator and test bench
+
+The current manifests deploy the trusted gateway trial. The next change will
+replace that workload with a secretless CPU evaluator and a separate encrypted
+test-client Job. The client generates keys, encrypts, calls the evaluator,
+decrypts the returned ciphertext and writes the benchmark result; plaintext
+and the secret key never enter the evaluator Pod.
+
+See
+[docs/encrypted-he-deployment.md](docs/encrypted-he-deployment.md) for the
+exact manifest ownership, separate CPU/GPU run procedure, result collection
+and delivery checklist. The document is a target contract; the current YAML
+does not satisfy it yet.
+
 ## Layout
 
 ```text
