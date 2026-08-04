@@ -51,6 +51,10 @@ Full commands, verification, and optional Traefik access are in
 
 ## Benchmarks
 
+The current goal, trust boundary, CPU/GPU split, benchmark meaning, and known
+SUM limitation are summarized in
+[docs/what-we-are-building.md](docs/what-we-are-building.md).
+
 Data preparation and the 50k, 100k, 500k, 1m, and 10m commands are in
 [docs/he-benchmark-commands.md](docs/he-benchmark-commands.md).
 
