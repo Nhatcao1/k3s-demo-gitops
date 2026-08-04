@@ -33,10 +33,16 @@ kubectl -n "$namespace" set resources deployment/he-evaluator-cpu \
   --requests=cpu=1,memory=2Gi \
   --limits=cpu=4,memory=8Gi
 
+kubectl -n "$namespace" set env deployment/he-evaluator-cpu \
+  MAX_ARTIFACT_BYTES=268435456 \
+  MAX_REQUEST_BYTES=536870912
+
 kubectl -n "$namespace" create service clusterip he-evaluator \
   --tcp=8080:8080 \
   --dry-run=client -o yaml |
   kubectl apply -f -
+
+kubectl -n "$namespace" rollout restart deployment/he-evaluator-cpu
 
 kubectl -n "$namespace" rollout status deployment/he-evaluator-cpu \
   --timeout=10m

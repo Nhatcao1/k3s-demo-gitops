@@ -2,6 +2,7 @@
 .env
 /__pycache__/
 **/__pycache__/
+/benchmark_runs/
 /data/
 *.rendered.yaml
 *-secret.yaml

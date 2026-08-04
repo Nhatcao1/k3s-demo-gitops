@@ -133,6 +133,12 @@ kubectl -n he-dev get deployment,pods,service,ingress -o wide
 kubectl -n he-dev logs deployment/he-evaluator-cpu --tail=100
 ```
 
-The future benchmark Job should call `http://he-evaluator:8080/v1/evaluate`
-from inside `he-dev`. Argo CD will be reintroduced only after the direct CPU
-deployment and benchmark pass.
+Run the implemented benchmark Jobs with:
+
+```sh
+./scripts/benchmark/run-he-bench.sh cpu primitive 50000
+./scripts/benchmark/run-he-bench.sh cpu sum 50000
+```
+
+They call `http://he-evaluator:8080/v1/evaluate` from inside `he-dev`. Argo CD
+will be reintroduced only after the direct CPU deployment and benchmarks pass.

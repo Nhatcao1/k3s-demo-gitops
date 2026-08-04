@@ -54,6 +54,6 @@ Full commands, verification, and optional Traefik access are in
 Data preparation and the 50k, 100k, 500k, 1m, and 10m commands are in
 [docs/he-benchmark-commands.md](docs/he-benchmark-commands.md).
 
-The copied Python benchmarks still use the old direct OpenFHE session and must
-be adapted to `/v1/evaluate` before they are service benchmarks. GPU service
-testing waits for FIDESlib ciphertext transport.
+The CPU benchmarks run as Kubernetes Jobs, call `/v1/evaluate`, and compare
+each HE operation with its Python baseline. GPU service testing waits for
+FIDESlib ciphertext transport.

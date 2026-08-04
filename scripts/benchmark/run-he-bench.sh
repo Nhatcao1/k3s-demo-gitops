@@ -40,32 +40,133 @@ else
 fi
 
 if [ "$backend" = "gpu" ]; then
-  echo "GPU is pending: FIDESlib operations exist, but remote ciphertext transport is not implemented yet." >&2
+  echo "GPU is pending: FIDESlib remote ciphertext transport is not implemented yet." >&2
   exit 3
 fi
 
-data_dir=${DATA_DIR:-"$repo_dir/data"}
-prepared_dir=${PREPARED_DIR:-"$data_dir/prepared/installments_columns"}
-source_csv=${SOURCE_CSV:-"$data_dir/home_credit/installments_payments.csv"}
-python_bin=${PYTHON_BIN:-python3}
+command -v kubectl >/dev/null 2>&1 || {
+  echo "kubectl is required." >&2
+  exit 1
+}
+
+namespace=${HE_NAMESPACE:-he-dev}
+client_image=${BENCH_IMAGE:-registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest}
+service_url=${HE_SERVICE_URL:-http://he-evaluator:8080/v1/evaluate}
 repetitions=${REPETITIONS:-$DEFAULT_REPETITIONS}
-run_id=${RUN_ID:-"$(date -u +%Y%m%dT%H%M%SZ)"}
-destination=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/${backend}_${workload}_$run_id"}
+batch_size=${BATCH_SIZE:-8192}
+request_timeout=${REQUEST_TIMEOUT_SECONDS:-300}
+job_timeout=${BENCH_JOB_TIMEOUT_SECONDS:-43200}
+run_id=${RUN_ID:-"$(date -u +%Y%m%d%H%M%S)"}
+output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/service_${workload}_$run_id"}
 
-if [ "$workload" = "primitive" ]; then
-  "$python_bin" "$script_dir/primitives.py" \
-    --prepared-dir "$prepared_dir" \
-    --value-count $sizes \
-    --operation $PRIMITIVE_OPERATIONS \
-    --repetitions "$repetitions" \
-    --output-dir "$destination"
-else
-  "$python_bin" "$script_dir/payment_diff_sum_mean.py" \
-    --operation sum \
-    --installments "$source_csv" \
-    --value-count $sizes \
-    --repetitions "$repetitions" \
-    --output-dir "$destination"
-fi
+kubectl -n "$namespace" get deployment he-evaluator-cpu >/dev/null
+kubectl -n "$namespace" get service he-evaluator >/dev/null
+kubectl -n "$namespace" create configmap he-service-benchmark-code \
+  --from-file=service_benchmark.py="$script_dir/service_benchmark.py" \
+  --dry-run=client -o yaml |
+  kubectl apply -f -
 
-echo "Results: $destination"
+mkdir -p "$output_dir"
+
+run_one() {
+  size=$1
+  job_name="he-bench-${workload}-${size}-${run_id}"
+
+  kubectl delete job "$job_name" -n "$namespace" --ignore-not-found >/dev/null
+  kubectl apply -f - <<YAML
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $job_name
+  namespace: $namespace
+  labels:
+    app: he-service-benchmark
+    workload: $workload
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: $job_timeout
+  template:
+    metadata:
+      labels:
+        app: he-service-benchmark
+        workload: $workload
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: gitlab-registry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: benchmark-client
+          image: $client_image
+          imagePullPolicy: Always
+          command:
+            - python
+            - /benchmark/service_benchmark.py
+          args:
+            - --url
+            - $service_url
+            - --workload
+            - $workload
+            - --value-count
+            - "$size"
+            - --batch-size
+            - "$batch_size"
+            - --repetitions
+            - "$repetitions"
+            - --timeout
+            - "$request_timeout"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: benchmark-code
+              mountPath: /benchmark
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: benchmark-code
+          configMap:
+            name: he-service-benchmark-code
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 2Gi
+YAML
+
+  if ! kubectl wait --for=condition=complete "job/$job_name" \
+    -n "$namespace" --timeout="${job_timeout}s"; then
+    kubectl -n "$namespace" logs "job/$job_name" --all-containers=true || true
+    kubectl -n "$namespace" describe "job/$job_name" || true
+    return 1
+  fi
+
+  kubectl -n "$namespace" logs "job/$job_name" \
+    > "$output_dir/${size}.log"
+  sed -n 's/^BENCHMARK_RESULT=//p' "$output_dir/${size}.log" \
+    > "$output_dir/${size}.json"
+  test -s "$output_dir/${size}.json" || {
+    echo "Benchmark completed without a result marker; inspect $output_dir/${size}.log" >&2
+    return 1
+  }
+  echo "PASS: $workload $size -> $output_dir/${size}.json"
+}
+
+for size in $sizes; do
+  run_one "$size"
+done
+
+echo "Results: $output_dir"

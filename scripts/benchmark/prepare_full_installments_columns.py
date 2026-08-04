@@ -14,13 +14,13 @@ import csv
 import json
 import math
 import shutil
-import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from code.heir.common import write_json
+def write_json(path: Path, value: object) -> None:
+    """Write one portable JSON artifact without external project imports."""
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def prepare(
