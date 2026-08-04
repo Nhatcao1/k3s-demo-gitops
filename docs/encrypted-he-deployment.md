@@ -1,5 +1,8 @@
 # Encrypted HE evaluator and test-bench deployment contract
 
+> Argo CD is paused. Use `docs/k3s-direct-deployment.md` for the current
+> direct K3s commands and return to this target workflow later.
+
 ## Status
 
 This is the target for the next GitOps implementation. Current `apps/he/`
