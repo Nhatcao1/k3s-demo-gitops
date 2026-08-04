@@ -33,8 +33,13 @@ does not satisfy it yet.
 apps/he/base/          reusable trusted HE gateway resources
 apps/he/overlays/dev/  development image tag and hostname
 argocd/                he-lab project and he-dev Application
+benchmarks/he/          shared CPU/GPU trial sizes and backend status
 scripts/               validation, registry, promotion, and status helpers
 ```
+
+For the short server commands that prepare data once and run the 50k through
+10m primitive/SUM cases, see
+[docs/he-benchmark-commands.md](docs/he-benchmark-commands.md).
 
 ## First deployment order
 
