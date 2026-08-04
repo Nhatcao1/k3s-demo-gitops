@@ -6,7 +6,7 @@ benchmarks pass.
 
 ```text
 k3s-demo-app main branch
-  -> GitLab CI builds openfhe-evaluator-cpu:latest
+  -> GitLab CI builds dockerboi99/he_k8s:cpu-latest
   -> kubectl deploys it to namespace he-dev
   -> clients call http://he-evaluator:8080 inside K3s
 ```
@@ -29,16 +29,15 @@ under `scripts/benchmark/`.
 Push `k3s-demo-app` and wait for GitLab to publish:
 
 ```text
-registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest
-docker.io/dockerboi99/he_k8s:latest
+docker.io/dockerboi99/he_k8s:cpu-latest
+docker.io/dockerboi99/he_k8s:gpu-latest
 ```
 
 ## Direct K3s deployment
 
-Create the private-registry secret once, then deploy the successful image:
+Deploy the successful public Docker Hub image:
 
 ```sh
-./scripts/create-registry-secrets.sh
 ./scripts/benchmark/deploy-cpu-service.sh
 ```
 

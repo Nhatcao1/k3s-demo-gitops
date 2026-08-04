@@ -45,7 +45,7 @@ command -v kubectl >/dev/null 2>&1 || {
 }
 
 namespace=${HE_NAMESPACE:-he-dev}
-client_image=${BENCH_IMAGE:-registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest}
+client_image=${BENCH_IMAGE:-docker.io/dockerboi99/he_k8s:cpu-latest}
 if [ "$backend" = "cpu" ]; then
   evaluator_deployment=he-evaluator-cpu
   evaluator_service=he-evaluator
@@ -98,8 +98,6 @@ spec:
         backend: $backend
     spec:
       restartPolicy: Never
-      imagePullSecrets:
-        - name: gitlab-registry
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

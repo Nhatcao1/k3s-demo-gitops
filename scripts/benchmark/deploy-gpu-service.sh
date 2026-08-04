@@ -6,7 +6,7 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-image_tag=${1:-latest}
+image_tag=${1:-gpu-latest}
 case "$image_tag" in
   *[!0-9A-Za-z._-]*|"")
     echo "Image tag contains unsupported characters." >&2
@@ -17,7 +17,7 @@ esac
 namespace=${HE_NAMESPACE:-he-dev}
 image="docker.io/dockerboi99/he_k8s:$image_tag"
 
-kubectl get namespace "$namespace" >/dev/null
+kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
 
 kubectl apply -f - <<YAML
 apiVersion: apps/v1

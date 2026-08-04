@@ -33,14 +33,13 @@ service benchmark implementation.
 
 ## 1. Deploy or refresh the CPU service
 
-Wait for the `k3s-demo-app` GitLab pipeline to publish the CPU `latest` image,
+Wait for the `k3s-demo-app` GitLab pipeline to publish the CPU `cpu-latest` image,
 then run:
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
 git pull --ff-only
 
-./scripts/create-registry-secrets.sh       # only needed initially/token change
 ./scripts/benchmark/deploy-cpu-service.sh
 ```
 
@@ -72,11 +71,11 @@ waits for completion, and copies the Job log to a JSON file under
 ## GPU: deploy and run the same benchmark
 
 First run the manual `build-fides-evaluator-gpu` GitLab job. After the
-`dockerboi99/he_k8s:latest` image is pushed and the K3s NVIDIA device plugin is
+`dockerboi99/he_k8s:gpu-latest` image is pushed and the K3s NVIDIA device plugin is
 working:
 
 ```sh
-./scripts/benchmark/deploy-gpu-service.sh latest
+./scripts/benchmark/deploy-gpu-service.sh
 ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
 ./scripts/benchmark/run-he-bench.sh gpu sum 50000
 ```
@@ -120,7 +119,7 @@ export BATCH_SIZE=8192
 export REQUEST_TIMEOUT_SECONDS=300
 export HE_NAMESPACE=he-dev
 export HE_SERVICE_URL=http://he-evaluator:8080/v1/evaluate
-export BENCH_IMAGE=registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest
+export BENCH_IMAGE=docker.io/dockerboi99/he_k8s:cpu-latest
 ```
 
 ## Measurements

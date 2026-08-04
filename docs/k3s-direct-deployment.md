@@ -9,28 +9,21 @@ SUM services.
 
 ## 1. Select the application image
 
-Use the `latest` image produced from the default branch:
+Use the `cpu-latest` image produced from the default branch:
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
 
-export HE_IMAGE="registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest"
+export HE_IMAGE="docker.io/dockerboi99/he_k8s:cpu-latest"
 ```
 
-## 2. Create the namespace and registry pull secret
+## 2. Create the namespace
 
-Create a GitLab deploy token with `read_registry`, then run:
-
-```sh
-./scripts/create-registry-secrets.sh
-```
-
-The script creates namespace `he-dev` and secret `gitlab-registry`. Attach the
-secret to the namespace's default ServiceAccount:
+The deployment helper creates `he-dev` when it does not already exist. The
+Docker Hub repository is public, so this direct path needs no registry secret:
 
 ```sh
-kubectl -n he-dev patch serviceaccount default \
-  -p '{"imagePullSecrets":[{"name":"gitlab-registry"}]}'
+kubectl get namespace he-dev >/dev/null 2>&1 || kubectl create namespace he-dev
 ```
 
 ## 3. Create or update the evaluator Deployment

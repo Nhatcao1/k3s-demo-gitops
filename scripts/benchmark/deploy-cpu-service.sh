@@ -6,7 +6,7 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-image_tag=${1:-latest}
+image_tag=${1:-cpu-latest}
 case "$image_tag" in
   *[!0-9A-Za-z._-]*|"")
     echo "Image tag contains unsupported characters." >&2
@@ -15,13 +15,9 @@ case "$image_tag" in
 esac
 
 namespace=${HE_NAMESPACE:-he-dev}
-image="registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:$image_tag"
+image="docker.io/dockerboi99/he_k8s:$image_tag"
 
-kubectl get namespace "$namespace" >/dev/null
-kubectl -n "$namespace" get secret gitlab-registry >/dev/null
-
-kubectl -n "$namespace" patch serviceaccount default \
-  -p '{"imagePullSecrets":[{"name":"gitlab-registry"}]}'
+kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
 
 kubectl -n "$namespace" create deployment he-evaluator-cpu \
   --image="$image" \
