@@ -35,7 +35,8 @@ The short repeatable command is:
 ```
 
 It performs the Deployment, resource, Service, and rollout commands shown
-below.
+below and sets `imagePullPolicy: Always` so `cpu-latest` is refreshed from
+Docker Hub instead of using a stale node cache.
 
 ```sh
 kubectl -n he-dev create deployment he-evaluator-cpu \

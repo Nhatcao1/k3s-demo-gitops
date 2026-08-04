@@ -25,6 +25,12 @@ kubectl -n "$namespace" create deployment he-evaluator-cpu \
   --dry-run=client -o yaml |
   kubectl apply -f -
 
+# cpu-latest is a moving tag, so every rollout must check Docker Hub instead
+# of silently reusing an older K3s/containerd cache entry.
+kubectl -n "$namespace" patch deployment he-evaluator-cpu \
+  --type=strategic \
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"he-evaluator-cpu","imagePullPolicy":"Always"}]}}}}'
+
 kubectl -n "$namespace" set resources deployment/he-evaluator-cpu \
   --requests=cpu=1,memory=2Gi \
   --limits=cpu=4,memory=8Gi
