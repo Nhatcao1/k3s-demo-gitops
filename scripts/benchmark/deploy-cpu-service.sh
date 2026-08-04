@@ -29,9 +29,6 @@ kubectl -n "$namespace" create deployment he-evaluator-cpu \
   --dry-run=client -o yaml |
   kubectl apply -f -
 
-kubectl -n "$namespace" set image deployment/he-evaluator-cpu \
-  "he-evaluator-cpu=$image"
-
 kubectl -n "$namespace" set resources deployment/he-evaluator-cpu \
   --requests=cpu=1,memory=2Gi \
   --limits=cpu=4,memory=8Gi
