@@ -69,6 +69,22 @@ The command creates the benchmark code ConfigMap, creates a Kubernetes Job,
 waits for completion, and copies the Job log to a JSON file under
 `benchmark_runs/`.
 
+## GPU: deploy and run the same benchmark
+
+First run the manual `build-fides-evaluator-gpu` GitLab job. After the
+`dockerboi99/he_k8s:latest` image is pushed and the K3s NVIDIA device plugin is
+working:
+
+```sh
+./scripts/benchmark/deploy-gpu-service.sh latest
+./scripts/benchmark/run-he-bench.sh gpu primitive 50000
+./scripts/benchmark/run-he-bench.sh gpu sum 50000
+```
+
+The benchmark Job is still the trusted standard OpenFHE-Python client. It sends
+the public key to FIDESlib because the GPU backend needs it to load evaluation
+keys, but it never sends the secret key. CPU and GPU remain separate images.
+
 ## 3. Run one larger size
 
 Allowed sizes are `50000`, `100000`, `500000`, `1000000`, and `10000000`:

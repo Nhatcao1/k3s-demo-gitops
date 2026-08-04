@@ -19,6 +19,19 @@ PRIMITIVE_OPERATIONS = ("add", "subtract", "multiply")
 OPERATIONS = PRIMITIVE_OPERATIONS + ("sum",)
 
 
+def _fides_sum_rotation_indices(valid_count: int) -> list[int]:
+    """Keys required by FIDESlib Accumulate(..., bStep=4)."""
+    indices: list[int] = []
+    step = 1
+    while step < valid_count:
+        for multiplier in range(1, 4):
+            index = multiplier * step
+            if index < valid_count:
+                indices.append(index)
+        step *= 4
+    return indices
+
+
 def _timed(function: Callable[..., Any], *args: Any) -> tuple[Any, float]:
     started = time.perf_counter()
     result = function(*args)
@@ -105,7 +118,12 @@ def _error(observed: list[float] | float, expected: list[float] | float) -> tupl
     return absolute, relative
 
 
-def _create_client(openfhe: Any, batch_size: int, operations: tuple[str, ...]) -> tuple[Any, Any, bytes, dict[str, bytes], float]:
+def _create_client(
+    openfhe: Any,
+    batch_size: int,
+    operations: tuple[str, ...],
+    public_key_required: bool,
+) -> tuple[Any, Any, bytes, bytes | None, dict[str, bytes], float]:
     started = time.perf_counter()
     parameters = openfhe.CCParamsCKKSRNS()
     parameters.SetMultiplicativeDepth(1)
@@ -124,10 +142,19 @@ def _create_client(openfhe: Any, batch_size: int, operations: tuple[str, ...]) -
         context.EvalMultKeyGen(keys.secretKey)
     if "sum" in operations:
         context.EvalSumKeyGen(keys.secretKey)
+        if public_key_required:
+            context.EvalRotateKeyGen(
+                keys.secretKey, _fides_sum_rotation_indices(batch_size)
+            )
 
     with tempfile.TemporaryDirectory(prefix="he-service-setup-") as directory:
         root = Path(directory)
         context_bytes = _serialize(openfhe, root / "context.bin", context)
+        public_key_bytes = None
+        if public_key_required:
+            public_key_bytes = _serialize(
+                openfhe, root / "public-key.bin", keys.publicKey
+            )
         evaluation_keys: dict[str, bytes] = {}
         if "multiply" in operations:
             path = root / "eval-mult.bin"
@@ -139,7 +166,14 @@ def _create_client(openfhe: Any, batch_size: int, operations: tuple[str, ...]) -
             if not context.SerializeEvalAutomorphismKey(str(path), openfhe.BINARY):
                 raise RuntimeError("could not serialize SUM keys")
             evaluation_keys["sum"] = path.read_bytes()
-    return context, keys, context_bytes, evaluation_keys, time.perf_counter() - started
+    return (
+        context,
+        keys,
+        context_bytes,
+        public_key_bytes,
+        evaluation_keys,
+        time.perf_counter() - started,
+    )
 
 
 def _run_operation(
@@ -156,6 +190,7 @@ def _run_operation(
     context: Any,
     keys: Any,
     context_bytes: bytes,
+    public_key_bytes: bytes | None,
     evaluation_keys: dict[str, bytes],
 ) -> dict[str, Any]:
     context_encoded = _encoded(context_bytes)
@@ -204,6 +239,8 @@ def _run_operation(
                     "ciphertext_a": _encoded(left_bytes),
                     "request_id": f"{operation}-{repetition}-{chunks}",
                 }
+                if public_key_bytes is not None:
+                    payload["public_key"] = _encoded(public_key_bytes)
                 if right_ciphertext is not None:
                     right_bytes = _serialize(openfhe, root / "right.bin", right_ciphertext)
                     payload["ciphertext_b"] = _encoded(right_bytes)
@@ -319,8 +356,16 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
 
     operations = PRIMITIVE_OPERATIONS if args.workload == "primitive" else ("sum",)
     capabilities = _check_capabilities(args.url, args.timeout, operations)
-    context, keys, context_bytes, evaluation_keys, setup_seconds = _create_client(
-        openfhe, args.batch_size, operations
+    public_key_required = bool(capabilities.get("public_key_required_by_api", False))
+    (
+        context,
+        keys,
+        context_bytes,
+        public_key_bytes,
+        evaluation_keys,
+        setup_seconds,
+    ) = _create_client(
+        openfhe, args.batch_size, operations, public_key_required
     )
     results = [
         _run_operation(
@@ -336,6 +381,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             context=context,
             keys=keys,
             context_bytes=context_bytes,
+            public_key_bytes=public_key_bytes,
             evaluation_keys=evaluation_keys,
         )
         for operation in operations
@@ -351,6 +397,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "repetitions": args.repetitions,
         "context_and_key_setup_seconds": setup_seconds,
         "secret_key_sent_to_service": False,
+        "public_key_sent_to_service": public_key_required,
         "operations": results,
     }
 

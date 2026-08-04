@@ -39,11 +39,6 @@ else
   usage
 fi
 
-if [ "$backend" = "gpu" ]; then
-  echo "GPU is pending: FIDESlib remote ciphertext transport is not implemented yet." >&2
-  exit 3
-fi
-
 command -v kubectl >/dev/null 2>&1 || {
   echo "kubectl is required." >&2
   exit 1
@@ -51,16 +46,25 @@ command -v kubectl >/dev/null 2>&1 || {
 
 namespace=${HE_NAMESPACE:-he-dev}
 client_image=${BENCH_IMAGE:-registry.gitlab.com/nhatcao99uetwork/k3s-demo-app/openfhe-evaluator-cpu:latest}
-service_url=${HE_SERVICE_URL:-http://he-evaluator:8080/v1/evaluate}
+if [ "$backend" = "cpu" ]; then
+  evaluator_deployment=he-evaluator-cpu
+  evaluator_service=he-evaluator
+  default_service_url=http://he-evaluator:8080/v1/evaluate
+else
+  evaluator_deployment=he-evaluator-gpu
+  evaluator_service=he-evaluator-gpu
+  default_service_url=http://he-evaluator-gpu:8080/v1/evaluate
+fi
+service_url=${HE_SERVICE_URL:-$default_service_url}
 repetitions=${REPETITIONS:-$DEFAULT_REPETITIONS}
 batch_size=${BATCH_SIZE:-8192}
 request_timeout=${REQUEST_TIMEOUT_SECONDS:-300}
 job_timeout=${BENCH_JOB_TIMEOUT_SECONDS:-43200}
 run_id=${RUN_ID:-"$(date -u +%Y%m%d%H%M%S)"}
-output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/service_${workload}_$run_id"}
+output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/${backend}_${workload}_$run_id"}
 
-kubectl -n "$namespace" get deployment he-evaluator-cpu >/dev/null
-kubectl -n "$namespace" get service he-evaluator >/dev/null
+kubectl -n "$namespace" get deployment "$evaluator_deployment" >/dev/null
+kubectl -n "$namespace" get service "$evaluator_service" >/dev/null
 kubectl -n "$namespace" create configmap he-service-benchmark-code \
   --from-file=service_benchmark.py="$script_dir/service_benchmark.py" \
   --dry-run=client -o yaml |
@@ -70,7 +74,7 @@ mkdir -p "$output_dir"
 
 run_one() {
   size=$1
-  job_name="he-bench-${workload}-${size}-${run_id}"
+  job_name="he-bench-${backend}-${workload}-${size}-${run_id}"
 
   kubectl delete job "$job_name" -n "$namespace" --ignore-not-found >/dev/null
   kubectl apply -f - <<YAML
@@ -82,6 +86,7 @@ metadata:
   labels:
     app: he-service-benchmark
     workload: $workload
+    backend: $backend
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: $job_timeout
@@ -90,6 +95,7 @@ spec:
       labels:
         app: he-service-benchmark
         workload: $workload
+        backend: $backend
     spec:
       restartPolicy: Never
       imagePullSecrets:

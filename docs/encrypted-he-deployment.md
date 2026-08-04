@@ -31,7 +31,8 @@ log. The evaluator receives no plaintext input.
 | Service benchmark client | `scripts/benchmark/service_benchmark.py` | implemented |
 | Primitive benchmark Job | `scripts/benchmark/run-he-bench.sh cpu primitive ...` | implemented |
 | SUM benchmark Job | `scripts/benchmark/run-he-bench.sh cpu sum ...` | implemented |
-| GPU remote benchmark | FIDESlib | blocked on ciphertext transport |
+| GPU evaluator Deployment and Service | `scripts/benchmark/deploy-gpu-service.sh` | implemented; server verification pending |
+| GPU remote benchmark | `scripts/benchmark/run-he-bench.sh gpu ...` | implemented; server verification pending |
 | Argo CD reconciliation | `argocd/` | intentionally paused |
 
 The CPU evaluator and trusted benchmark client currently use the same standard
