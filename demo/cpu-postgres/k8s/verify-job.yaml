@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: he-salary-verify-
+  namespace: he-dev
+  labels:
+    app.kubernetes.io/name: he-salary-verify
+    app.kubernetes.io/part-of: cpu-postgres-demo
+    he.demo/stage: verify
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: he-salary-verify
+        app.kubernetes.io/part-of: cpu-postgres-demo
+        he.demo/stage: verify
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: trusted-verifier
+          image: docker.io/dockerboi99/he_k8s:cpu-latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - cpu_postgres_demo.cli
+          args:
+            - verify
+          envFrom:
+            - configMapRef:
+                name: cpu-postgres-demo-config
+            - secretRef:
+                name: cpu-postgres-demo-db
+            - secretRef:
+                name: cpu-postgres-demo-input
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 512Mi

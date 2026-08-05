@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: cpu-postgres-schema-
+  namespace: he-dev
+  labels:
+    app.kubernetes.io/name: cpu-postgres-demo-schema
+    app.kubernetes.io/part-of: cpu-postgres-demo
+    he.demo/stage: schema
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cpu-postgres-demo-schema
+        app.kubernetes.io/part-of: cpu-postgres-demo
+        he.demo/stage: schema
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: schema
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - psql
+          args:
+            - --set=ON_ERROR_STOP=1
+            - --file=/schema/schema.sql
+          envFrom:
+            - configMapRef:
+                name: cpu-postgres-demo-config
+            - secretRef:
+                name: cpu-postgres-demo-db
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      volumes:
+        - name: schema
+          configMap:
+            name: cpu-postgres-demo-schema

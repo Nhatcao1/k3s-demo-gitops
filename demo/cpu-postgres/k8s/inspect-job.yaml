@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: he-salary-inspect-
+  namespace: he-dev
+  labels:
+    app.kubernetes.io/name: he-salary-inspect
+    app.kubernetes.io/part-of: cpu-postgres-demo
+    he.demo/stage: inspect
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: he-salary-inspect
+        app.kubernetes.io/part-of: cpu-postgres-demo
+        he.demo/stage: inspect
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: metadata-inspector
+          image: docker.io/dockerboi99/he_k8s:cpu-latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - cpu_postgres_demo.cli
+          args:
+            - inspect
+          envFrom:
+            - configMapRef:
+                name: cpu-postgres-demo-config
+            - secretRef:
+                name: cpu-postgres-demo-db
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
