@@ -33,6 +33,11 @@ repository/tags, Deployment names, or Service names change. It contains no
 secret values. The scripts render the tracked files in `k8s/`; Kubernetes YAML
 is no longer embedded inside the shell scripts.
 
+Scripted `kubectl` calls verify the K3s API certificate by default. For a
+temporary lab certificate problem only, set
+`HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=true` in `config/he-lab.env`; every helper
+then adds `--insecure-skip-tls-verify=true` consistently.
+
 ## Build first
 
 Push `k3s-demo-app` and wait for GitLab to publish:

@@ -4,6 +4,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 . "$repo_dir/config/he-lab.env"
+. "$repo_dir/scripts/lib/kubectl.sh"
 
 if [ "$#" -gt 1 ]; then
   echo "Usage: $0 [image-tag]" >&2
@@ -37,14 +38,14 @@ command -v python3 >/dev/null 2>&1 || {
 HE_GPU_IMAGE=$image
 export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT
 
-kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
+he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
-python3 "$renderer" "$template" | kubectl apply -f -
+python3 "$renderer" "$template" | he_kubectl apply -f -
 
 # A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
-kubectl -n "$namespace" rollout restart "deployment/$deployment"
+he_kubectl -n "$namespace" rollout restart "deployment/$deployment"
 
-kubectl -n "$namespace" rollout status "deployment/$deployment" \
+he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=15m
 
 echo "GPU evaluator: http://$service:$HE_SERVICE_PORT"

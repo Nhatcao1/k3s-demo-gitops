@@ -5,6 +5,7 @@ repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 render_dir=$(mktemp -d)
 trap 'rm -rf "$render_dir"' EXIT HUP INT TERM
 . "$repo_dir/config/he-lab.env"
+. "$repo_dir/scripts/lib/kubectl.sh"
 
 command -v kubectl >/dev/null 2>&1 || {
   echo "kubectl is required." >&2
@@ -56,10 +57,10 @@ for rendered in \
     echo "Unrendered placeholder in $rendered" >&2
     exit 1
   fi
-  kubectl apply --dry-run=client --validate=false -f "$rendered" >/dev/null
+  he_kubectl apply --dry-run=client --validate=false -f "$rendered" >/dev/null
 done
 
-kubectl kustomize "$repo_dir/argocd" \
+he_kubectl kustomize "$repo_dir/argocd" \
   > "$render_dir/argocd.yaml"
 
 grep -q "name: $HE_CPU_DEPLOYMENT" "$render_dir/cpu.yaml"

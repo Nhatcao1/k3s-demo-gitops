@@ -14,6 +14,7 @@ requested_size=$3
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 . "$repo_dir/config/he-lab.env"
+. "$repo_dir/scripts/lib/kubectl.sh"
 . "$repo_dir/benchmarks/he/matrix.env"
 
 case "$backend" in
@@ -71,12 +72,12 @@ command -v python3 >/dev/null 2>&1 || {
   exit 1
 }
 
-kubectl -n "$namespace" get deployment "$evaluator_deployment" >/dev/null
-kubectl -n "$namespace" get service "$evaluator_service" >/dev/null
-kubectl -n "$namespace" create configmap he-service-benchmark-code \
+he_kubectl -n "$namespace" get deployment "$evaluator_deployment" >/dev/null
+he_kubectl -n "$namespace" get service "$evaluator_service" >/dev/null
+he_kubectl -n "$namespace" create configmap he-service-benchmark-code \
   --from-file=service_benchmark.py="$script_dir/service_benchmark.py" \
   --dry-run=client -o yaml |
-  kubectl apply -f -
+  he_kubectl apply -f -
 
 mkdir -p "$output_dir"
 
@@ -84,7 +85,7 @@ run_one() {
   size=$1
   job_name="he-bench-${backend}-${workload}-${size}-${run_id}"
 
-  kubectl delete job "$job_name" -n "$namespace" --ignore-not-found >/dev/null
+  he_kubectl delete job "$job_name" -n "$namespace" --ignore-not-found >/dev/null
   BENCH_JOB_NAME=$job_name
   BENCH_BACKEND=$backend
   BENCH_WORKLOAD=$workload
@@ -100,16 +101,16 @@ run_one() {
   export BENCH_BATCH_SIZE BENCH_REPETITIONS BENCH_REQUEST_TIMEOUT_SECONDS
   export BENCH_JOB_TIMEOUT_SECONDS
 
-  python3 "$renderer" "$template" | kubectl create -f -
+  python3 "$renderer" "$template" | he_kubectl create -f -
 
-  if ! kubectl wait --for=condition=complete "job/$job_name" \
+  if ! he_kubectl wait --for=condition=complete "job/$job_name" \
     -n "$namespace" --timeout="${job_timeout}s"; then
-    kubectl -n "$namespace" logs "job/$job_name" --all-containers=true || true
-    kubectl -n "$namespace" describe "job/$job_name" || true
+    he_kubectl -n "$namespace" logs "job/$job_name" --all-containers=true || true
+    he_kubectl -n "$namespace" describe "job/$job_name" || true
     return 1
   fi
 
-  kubectl -n "$namespace" logs "job/$job_name" \
+  he_kubectl -n "$namespace" logs "job/$job_name" \
     > "$output_dir/${size}.log"
   sed -n 's/^BENCHMARK_RESULT=//p' "$output_dir/${size}.log" \
     > "$output_dir/${size}.json"

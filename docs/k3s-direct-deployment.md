@@ -29,6 +29,20 @@ k8s/benchmark-job.yaml
 Edit resources, probes, and volumes in YAML. Do not put Kubernetes YAML back
 inside the shell scripts.
 
+### Optional K3s TLS workaround
+
+All repository scripts verify the Kubernetes API certificate by default. If a
+temporary lab cluster fails specifically with an `x509` certificate error,
+change this setting in `config/he-lab.env`:
+
+```sh
+: "${HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY:=true}"
+```
+
+Every scripted `kubectl` call will then use
+`--insecure-skip-tls-verify=true`. Return it to `false` after fixing the K3s
+kubeconfig CA; this setting does not affect Docker image pulls or GitLab SSH.
+
 ## 2. Create the namespace
 
 The deployment helper creates `he-dev` when it does not already exist. The

@@ -166,11 +166,14 @@ Optional overrides:
 export BATCH_SIZE=8192
 export REQUEST_TIMEOUT_SECONDS=300
 export HE_NAMESPACE=he-dev
+export HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=false
 export HE_SERVICE_URL=http://he-evaluator:8080/v1/evaluate
 export BENCH_IMAGE=docker.io/dockerboi99/he_k8s:cpu-latest
 ```
 
 These shell overrides take priority over `config/he-lab.env` for one run.
+Set the TLS option to `true` only when `kubectl` reports an `x509` error from a
+temporary lab certificate.
 
 ## Measurements
 

@@ -20,3 +20,7 @@ When the Argo phase resumes:
 `bootstrap.sh` intentionally preserves the existing `counter-root` Application
 name during the migration to the HE lab. Review the saved `argocd/` and
 `apps/he/` manifests before resuming automatic synchronization.
+
+These helpers also honor `HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY` from
+`config/he-lab.env`. Keep it `false` unless the lab Kubernetes API currently
+has an `x509` certificate problem.
