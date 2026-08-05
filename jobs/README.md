@@ -1,5 +1,22 @@
 # Simple HE computation Jobs
 
+## Self-contained CPU demo
+
+`cpu-service-demo.yaml` is a functional demo, not a benchmark. Its trusted
+client creates keys and small plaintext vectors, encrypts them, calls the CPU
+Service for add, subtract, multiply, and sum, then decrypts and checks every
+result. The secret key stays in the client Job.
+
+```sh
+job=$(kubectl create -f jobs/cpu-service-demo.yaml -o name)
+kubectl -n he-dev wait --for=condition=complete "$job" --timeout=10m
+kubectl -n he-dev logs "$job"
+```
+
+The output is one JSON object with `PASS` for all four operations.
+
+## Prepared encrypted request
+
 These are normal one-request submission Jobs, not benchmarks. The HE evaluator
 Service must already be deployed. A trusted client prepares an encrypted
 `request.json`; the Job sends it to either CPU or GPU and writes the encrypted

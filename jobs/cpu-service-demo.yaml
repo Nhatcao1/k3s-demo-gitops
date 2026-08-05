@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: he-demo-cpu-
+  namespace: he-dev
+  labels:
+    app: he-service-demo
+    backend: cpu
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: he-service-demo
+        backend: cpu
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: trusted-demo-client
+          image: docker.io/dockerboi99/he_k8s:cpu-latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - /app/client/cpu_service_demo.py
+          args:
+            - --url
+            - http://he-evaluator:8080/v1/evaluate
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
