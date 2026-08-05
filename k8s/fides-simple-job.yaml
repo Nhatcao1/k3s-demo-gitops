@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: he-fides-simple
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-fides-simple
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: he-fides-simple
+    spec:
+      restartPolicy: Never
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: hht-k8s-staging-22
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: T4
+          effect: NoSchedule
+      containers:
+        - name: fides-simple
+          image: ${HE_GPU_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - /usr/local/bin/fides-simple
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: 8Gi
+              nvidia.com/gpu: "1"

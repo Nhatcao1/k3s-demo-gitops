@@ -193,3 +193,27 @@ kubectl describe node <gpu-node-name> | grep -A5 Taints
 ```
 
 Edit that GPU YAML only if a different server uses different labels or taints.
+
+### Native FIDESlib smoke test
+
+Run the upstream FIDESlib `examples/simple/src/simple.cpp` binary before testing
+the HTTP adapter. It performs native C++ key generation, encryption, add,
+subtract, multiply, rotation, and decryption on the GPU:
+
+```sh
+./scripts/benchmark/run-fides-simple.sh
+```
+
+The Job requests one GPU on `hht-k8s-staging-22`. If the evaluator Deployment
+already owns the node's only GPU, temporarily release it and restore it after
+the test:
+
+```sh
+kubectl -n he-dev scale deployment/he-evaluator-gpu --replicas=0
+./scripts/benchmark/run-fides-simple.sh
+kubectl -n he-dev scale deployment/he-evaluator-gpu --replicas=1
+kubectl -n he-dev rollout status deployment/he-evaluator-gpu --timeout=15m
+```
+
+If this native test fails, the problem is CUDA/FIDESlib/T4 rather than the
+Python API or serialized-artifact bridge. If it passes, debug the bridge next.

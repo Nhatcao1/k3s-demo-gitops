@@ -19,6 +19,7 @@ command -v python3 >/dev/null 2>&1 || {
 for template in \
   "$repo_dir/k8s/cpu-evaluator.yaml" \
   "$repo_dir/k8s/gpu-evaluator.yaml" \
+  "$repo_dir/k8s/fides-simple-job.yaml" \
   "$repo_dir/k8s/benchmark-job.yaml"; do
   test -f "$template"
 done
@@ -47,11 +48,14 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/gpu-evaluator.yaml" > "$render_dir/gpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/fides-simple-job.yaml" > "$render_dir/fides-simple.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/benchmark-job.yaml" > "$render_dir/benchmark.yaml"
 
 for rendered in \
   "$render_dir/cpu.yaml" \
   "$render_dir/gpu.yaml" \
+  "$render_dir/fides-simple.yaml" \
   "$render_dir/benchmark.yaml"; do
   if grep -q '\${' "$rendered"; then
     echo "Unrendered placeholder in $rendered" >&2
@@ -71,6 +75,10 @@ grep -q 'nodeSelector:' "$render_dir/gpu.yaml"
 grep -q 'runtimeClassName: nvidia' "$render_dir/gpu.yaml"
 grep -q 'kubernetes.io/hostname: hht-k8s-staging-22' "$render_dir/gpu.yaml"
 grep -q 'value: T4' "$render_dir/gpu.yaml"
+grep -q 'name: he-fides-simple' "$render_dir/fides-simple.yaml"
+grep -q 'command:' "$render_dir/fides-simple.yaml"
+grep -q '/usr/local/bin/fides-simple' "$render_dir/fides-simple.yaml"
+grep -q "image: $HE_GPU_IMAGE" "$render_dir/fides-simple.yaml"
 grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
 grep -q 'name: he-dev' "$render_dir/argocd.yaml"
 grep -q 'name: he-lab' "$render_dir/argocd.yaml"
