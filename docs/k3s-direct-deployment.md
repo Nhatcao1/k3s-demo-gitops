@@ -163,7 +163,8 @@ The work-server scheduling rules are written directly in
 `k8s/gpu-evaluator.yaml`:
 
 ```text
-required node hostname: hkh-k8s-staging-21
+container runtime class: nvidia
+required node hostname: hht-k8s-staging-22
 tolerated node taint: dedicated=T4:NoSchedule
 ```
 
@@ -171,7 +172,8 @@ Only the GPU evaluator gets this node selector and toleration. The benchmark cli
 does not request a GPU. Confirm the target node before deployment:
 
 ```sh
-kubectl get node hkh-k8s-staging-21 -o custom-columns='NAME:.metadata.name,CORDONED:.spec.unschedulable,GPU:.status.allocatable.nvidia\.com/gpu,TAINTS:.spec.taints'
+kubectl get node hht-k8s-staging-22 -o custom-columns='NAME:.metadata.name,CORDONED:.spec.unschedulable,GPU:.status.allocatable.nvidia\.com/gpu,TAINTS:.spec.taints'
+kubectl get runtimeclass nvidia
 kubectl describe node <gpu-node-name> | grep -A5 Taints
 ```
 

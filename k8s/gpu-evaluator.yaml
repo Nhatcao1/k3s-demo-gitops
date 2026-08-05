@@ -13,8 +13,9 @@ spec:
       labels:
         app: ${HE_GPU_DEPLOYMENT}
     spec:
+      runtimeClassName: nvidia
       nodeSelector:
-        kubernetes.io/hostname: hkh-k8s-staging-21
+        kubernetes.io/hostname: hht-k8s-staging-22
       tolerations:
         - key: dedicated
           operator: Equal
