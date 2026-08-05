@@ -2,7 +2,36 @@
 
 Purpose: encrypt salary CSV and KPI, store the HE artifacts in PostgreSQL, calculate encrypted SUM, then encrypted SUM × encrypted KPI.
 
-## 1. Configure and generate input
+## 1. Pull the demo branch
+
+In an existing GitOps clone:
+
+```sh
+git fetch origin feat/cpu-postgres-demo
+git switch feat/cpu-postgres-demo
+git pull --ff-only origin feat/cpu-postgres-demo
+cd demo/cpu-postgres
+```
+
+For a new clone:
+
+```sh
+git clone --branch feat/cpu-postgres-demo --single-branch \
+  git@gitlab.com:nhatcao99uetwork/k3s-demo-gitops.git
+cd k3s-demo-gitops/demo/cpu-postgres
+```
+
+The demo pulls the public image `docker.io/dockerboi99/he_k8s:cpu-postgres-demo`.
+
+Optional: verify the K3s node can pull it before setup:
+
+```sh
+sudo k3s crictl pull docker.io/dockerboi99/he_k8s:cpu-postgres-demo
+```
+
+No GitLab branch switch is required for normal builds: a push to `feat/cpu-postgres-demo` triggers the app pipeline and publishes this tag. If the Docker Hub CI variables are protected, protect this feature branch once before retrying the pipeline.
+
+## 2. Configure and generate input
 
 Edit namespace, scheme, session, images, salary range and TLS in this file:
 
@@ -45,7 +74,7 @@ cat input.env
 vi salaries.csv
 ```
 
-## 2. Setup K3s and PostgreSQL
+## 3. Setup K3s and PostgreSQL
 
 ```sh
 ./scripts/setup.sh
@@ -55,7 +84,7 @@ vi salaries.csv
 
 The commands below use namespace `he-dev`; change it in `demo.env`, rerun setup, and replace `he-dev` below if needed. The insecure TLS flag is shown for a lab K3s certificate issue.
 
-## 3. Create context, keys and encrypted inputs
+## 4. Create context, keys and encrypted inputs
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -79,7 +108,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 `expected_amount` is a demo-only plaintext reference calculated with exact Python integer and decimal arithmetic.
 
-## 4. Calculate encrypted SUM
+## 5. Calculate encrypted SUM
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -101,7 +130,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,status,expected_amount,decrypted_amount,absolute_error FROM he_demo_sessions ORDER BY created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-## 5. Multiply encrypted SUM by encrypted KPI
+## 6. Multiply encrypted SUM by encrypted KPI
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -123,7 +152,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,status,expected_amount,decrypted_amount,absolute_error FROM he_demo_sessions ORDER BY created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-## 6. Decrypt and verify
+## 7. Decrypt and verify
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -147,7 +176,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 BGV should have zero error when the configured plaintext modulus is large enough; CKKS has a small approximation error.
 
-## 7. Keys and status
+## 8. Keys and status
 
 ```sh
 ./scripts/status.sh
@@ -167,7 +196,7 @@ Lab only: unwrap and print the raw secret key:
 ./scripts/show-secret-key.sh
 ```
 
-## 8. Cleanup
+## 9. Cleanup
 
 Delete demo Jobs before starting a new session; change `DEMO_SESSION_ID` and rerun setup first:
 
