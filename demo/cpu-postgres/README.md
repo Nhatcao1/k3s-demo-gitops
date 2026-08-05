@@ -1,57 +1,106 @@
 # CPU HE + PostgreSQL demo
 
-## Configure
+Purpose: encrypt salary CSV and KPI, store artifacts in PostgreSQL, calculate encrypted SUM, then encrypted SUM × KPI.
 
-Create a private salary CSV:
+## 1. Configure
 
-```sh
-cd demo/cpu-postgres
-cp salaries.example.csv salaries.csv
-vi salaries.csv
-```
-
-Each salary must be an integer from `10000000` to `200000000`; maximum 8192 rows.
-
-Select the namespace, scheme, session, KPI and images:
+Edit namespace, scheme, session, KPI, salary range and images:
 
 ```sh
 vi demo.env
 ```
 
-Use one published image for both schemes:
+Generate 100 salaries using `demo.env`:
 
-```text
-DEMO_HE_IMAGE=docker.io/dockerboi99/he_k8s:cpu-latest
-DEMO_SCHEME=ckks
-DEMO_SESSION_ID=salary-ckks-001
-DEMO_KPI=0.8
+```sh
+./scripts/generate-salaries.sh
 ```
 
-For BGV, change only the scheme and session:
+Generate a different count:
+
+```sh
+./scripts/generate-salaries.sh 500
+```
+
+Review or edit the generated CSV:
+
+```sh
+head salaries.csv
+vi salaries.csv
+```
+
+Use CKKS:
+
+```text
+DEMO_SCHEME=ckks
+DEMO_SESSION_ID=salary-ckks-001
+```
+
+Use BGV with the same CPU image:
 
 ```text
 DEMO_SCHEME=bgv
 DEMO_SESSION_ID=salary-bgv-001
 ```
 
-## Deploy and run
+## 2. Setup K3s and PostgreSQL
 
-Deploy PostgreSQL, encrypt the CSV and KPI, SUM, multiply, verify and inspect:
+Create namespace, Secrets, configuration, PostgreSQL and schema:
 
 ```sh
-./scripts/run-demo.sh
+./scripts/setup.sh
 ```
 
-Show Kubernetes and database progress:
+Prepare a small helper for the individual Jobs in this terminal:
 
 ```sh
+set -a
+. ./demo.env
+set +a
+
+renderer=../../scripts/render-he-yaml.py
+
+run_job() {
+  manifest=$1
+  job=$(python3 "$renderer" "k8s/$manifest" | kubectl create -f - -o name)
+  kubectl -n "$DEMO_NAMESPACE" wait --for=condition=complete "$job" --timeout=15m
+  kubectl -n "$DEMO_NAMESPACE" logs "$job"
+}
+```
+
+## 3. Create context, keys and encrypted inputs
+
+```sh
+run_job initialize-job.yaml
 ./scripts/status.sh
 ```
 
-Show sessions:
+## 4. Calculate encrypted SUM
 
 ```sh
-. ./demo.env
+run_job sum-job.yaml
+./scripts/status.sh
+```
+
+## 5. Multiply encrypted SUM by encrypted KPI
+
+```sh
+run_job multiply-job.yaml
+./scripts/status.sh
+```
+
+## 6. Decrypt and verify the final result
+
+```sh
+run_job verify-job.yaml
+./scripts/status.sh
+```
+
+## 7. Inspect PostgreSQL
+
+Show session progress:
+
+```sh
 kubectl -n "$DEMO_NAMESPACE" exec statefulset/cpu-postgres-demo -- sh -lc \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,scheme,status,valid_count,kpi_scale,updated_at FROM he_demo_sessions ORDER BY created_at;"'
 ```
@@ -59,25 +108,28 @@ kubectl -n "$DEMO_NAMESPACE" exec statefulset/cpu-postgres-demo -- sh -lc \
 Show completed operations:
 
 ```sh
-. ./demo.env
 kubectl -n "$DEMO_NAMESPACE" exec statefulset/cpu-postgres-demo -- sh -lc \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,operation,outcome,completed_at FROM he_demo_operations ORDER BY operation_id;"'
 ```
 
-Show stored ciphertext/context/key artifact sizes without printing payloads:
+Show artifact sizes:
 
 ```sh
-. ./demo.env
 kubectl -n "$DEMO_NAMESPACE" exec statefulset/cpu-postgres-demo -- sh -lc \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,artifact_name,octet_length(payload) AS bytes FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-Show the wrapped secret key stored by PostgreSQL:
+Run the metadata inspector:
 
 ```sh
-. ./demo.env
+run_job inspect-job.yaml
+```
+
+Show the wrapped secret key stored in PostgreSQL:
+
+```sh
 kubectl -n "$DEMO_NAMESPACE" exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,encode(payload, '\''base64'\'') AS wrapped_secret_key FROM he_demo_artifacts WHERE artifact_name='\''wrapped_secret_key'\'';"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT session_id,encode(payload, '\''base64'\'') FROM he_demo_artifacts WHERE artifact_name='\''wrapped_secret_key'\'';"'
 ```
 
 Lab only: unwrap and print the raw secret key:
@@ -86,18 +138,18 @@ Lab only: unwrap and print the raw secret key:
 ./scripts/show-secret-key.sh
 ```
 
-## Cleanup
+## 8. Cleanup
 
-Delete Jobs only:
+Delete Jobs:
 
 ```sh
 ./scripts/cleanup.sh
 ```
 
-Delete the complete demo including PostgreSQL data:
+Delete PostgreSQL and all demo data:
 
 ```sh
 ./scripts/cleanup.sh --all
 ```
 
-Flow diagram: [`FLOW.mmd`](FLOW.mmd).
+Flow: [`FLOW.mmd`](FLOW.mmd).

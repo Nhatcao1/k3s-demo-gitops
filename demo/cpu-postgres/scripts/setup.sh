@@ -4,8 +4,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 demo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 repo_dir=$(CDPATH= cd -- "$demo_dir/../.." && pwd)
-env_file=${DEMO_ENV_FILE:-$demo_dir/demo.env}
-. "$env_file"
+. "${DEMO_ENV_FILE:-$demo_dir/demo.env}"
 
 csv_file=$DEMO_CSV_FILE
 case "$csv_file" in
@@ -13,7 +12,7 @@ case "$csv_file" in
   *) csv_file=$demo_dir/$csv_file ;;
 esac
 test -f "$csv_file" || {
-  echo "Create $csv_file from salaries.example.csv first." >&2
+  echo "Run ./scripts/generate-salaries.sh first." >&2
   exit 1
 }
 
@@ -63,20 +62,8 @@ render schema-configmap.yaml | kubectl apply -f -
 render postgres.yaml | kubectl apply -f -
 kubectl -n "$DEMO_NAMESPACE" rollout status statefulset/cpu-postgres-demo --timeout=10m
 
-run_job() {
-  manifest=$1
-  job_name=$(render "$manifest" | kubectl create -f - -o jsonpath='{.metadata.name}')
-  echo "job/$job_name"
-  kubectl -n "$DEMO_NAMESPACE" wait --for=condition=complete "job/$job_name" --timeout=15m || {
-    kubectl -n "$DEMO_NAMESPACE" logs "job/$job_name" --all-containers=true || true
-    exit 1
-  }
-  kubectl -n "$DEMO_NAMESPACE" logs "job/$job_name" --all-containers=true
-}
+schema_job=$(render schema-job.yaml | kubectl create -f - -o name)
+kubectl -n "$DEMO_NAMESPACE" wait --for=condition=complete "$schema_job" --timeout=5m
+kubectl -n "$DEMO_NAMESPACE" logs "$schema_job"
 
-run_job schema-job.yaml
-run_job initialize-job.yaml
-run_job sum-job.yaml
-run_job multiply-job.yaml
-run_job verify-job.yaml
-run_job inspect-job.yaml
+echo "Setup complete. Continue with the README job commands."
