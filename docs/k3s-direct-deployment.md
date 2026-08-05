@@ -176,3 +176,6 @@ kubectl describe node <gpu-node-name> | grep -A5 Taints
 
 Change `HE_GPU_NODE_LABEL_*` or `HE_GPU_TAINT_*` in `config/he-lab.env` if a
 different GPU server uses different labels or taints.
+
+The GPU deploy helper also carries these five defaults for compatibility when
+a server has kept an older locally customized `he-lab.env` during `git pull`.

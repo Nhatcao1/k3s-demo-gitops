@@ -6,6 +6,14 @@ repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 . "$repo_dir/config/he-lab.env"
 . "$repo_dir/scripts/lib/kubectl.sh"
 
+# Backward-compatible defaults for servers that kept a locally customized
+# he-lab.env while pulling the newer GPU scheduling template.
+: "${HE_GPU_NODE_LABEL_KEY:=disktype}"
+: "${HE_GPU_NODE_LABEL_VALUE:=ssd}"
+: "${HE_GPU_TAINT_KEY:=dedicated}"
+: "${HE_GPU_TAINT_VALUE:=T4}"
+: "${HE_GPU_TAINT_EFFECT:=NoSchedule}"
+
 if [ "$#" -gt 1 ]; then
   echo "Usage: $0 [image-tag]" >&2
   exit 2
@@ -29,6 +37,8 @@ deployment=$HE_GPU_DEPLOYMENT
 service=$HE_GPU_SERVICE
 template="$repo_dir/k8s/gpu-evaluator.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
+rendered_yaml=$(mktemp)
+trap 'rm -f "$rendered_yaml"' EXIT HUP INT TERM
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render $template." >&2
@@ -42,7 +52,8 @@ export HE_GPU_TAINT_KEY HE_GPU_TAINT_VALUE HE_GPU_TAINT_EFFECT
 
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
-python3 "$renderer" "$template" | he_kubectl apply -f -
+python3 "$renderer" "$template" > "$rendered_yaml"
+he_kubectl apply -f "$rendered_yaml"
 
 # A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
 he_kubectl -n "$namespace" rollout restart "deployment/$deployment"

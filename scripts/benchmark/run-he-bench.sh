@@ -101,7 +101,16 @@ run_one() {
   export BENCH_BATCH_SIZE BENCH_REPETITIONS BENCH_REQUEST_TIMEOUT_SECONDS
   export BENCH_JOB_TIMEOUT_SECONDS
 
-  python3 "$renderer" "$template" | he_kubectl create -f -
+  rendered_job=$(mktemp)
+  if ! python3 "$renderer" "$template" > "$rendered_job"; then
+    rm -f "$rendered_job"
+    return 1
+  fi
+  if ! he_kubectl create -f "$rendered_job"; then
+    rm -f "$rendered_job"
+    return 1
+  fi
+  rm -f "$rendered_job"
 
   if ! he_kubectl wait --for=condition=complete "job/$job_name" \
     -n "$namespace" --timeout="${job_timeout}s"; then

@@ -29,6 +29,8 @@ deployment=$HE_CPU_DEPLOYMENT
 service=$HE_CPU_SERVICE
 template="$repo_dir/k8s/cpu-evaluator.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
+rendered_yaml=$(mktemp)
+trap 'rm -f "$rendered_yaml"' EXIT HUP INT TERM
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render $template." >&2
@@ -40,7 +42,8 @@ export HE_NAMESPACE HE_CPU_IMAGE HE_CPU_DEPLOYMENT HE_CPU_SERVICE HE_SERVICE_POR
 
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
-python3 "$renderer" "$template" | he_kubectl apply -f -
+python3 "$renderer" "$template" > "$rendered_yaml"
+he_kubectl apply -f "$rendered_yaml"
 
 # A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
 he_kubectl -n "$namespace" rollout restart "deployment/$deployment"
