@@ -13,17 +13,8 @@ spec:
       labels:
         app: ${HE_GPU_DEPLOYMENT}
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: In
-                    values:
-                      - hkh-k8s-staging-19
-                      - hkh-k8s-staging-20
-                      - hkh-k8s-staging-21
+      nodeSelector:
+        kubernetes.io/hostname: hkh-k8s-staging-21
       tolerations:
         - key: dedicated
           operator: Equal
