@@ -1,18 +1,18 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: he-fides-simple
+  name: he-fides-serial
   namespace: ${HE_NAMESPACE}
   labels:
-    app: he-fides-simple
+    app: he-fides-serial
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 900
+  activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
-        app: he-fides-simple
+        app: he-fides-serial
     spec:
       restartPolicy: Never
       runtimeClassName: nvidia
@@ -24,17 +24,25 @@ spec:
           value: T4
           effect: NoSchedule
       containers:
-        - name: fides-simple
-          image: ${HE_GPU_IMAGE}
+        - name: fides-serial
+          image: ${HE_FIDES_EXAMPLES_IMAGE}
           imagePullPolicy: Always
+          workingDir: /tmp
           command:
-            - /usr/local/bin/fides-simple
+            - /usr/local/bin/fides-serial
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "2"
+              memory: 4Gi
               nvidia.com/gpu: "1"
             limits:
               cpu: "4"
-              memory: 8Gi
+              memory: 12Gi
               nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 2Gi

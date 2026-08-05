@@ -194,14 +194,14 @@ kubectl describe node <gpu-node-name> | grep -A5 Taints
 
 Edit that GPU YAML only if a different server uses different labels or taints.
 
-### Native FIDESlib smoke test
+### Native FIDESlib examples
 
-Run the upstream FIDESlib `examples/simple/src/simple.cpp` binary before testing
-the HTTP adapter. It performs native C++ key generation, encryption, add,
-subtract, multiply, rotation, and decryption on the GPU:
+Run the native C++ examples before testing the HTTP adapter. Their commands,
+YAML files, expected behavior, and development plan are documented in
+`fides-examples/README.md`:
 
 ```sh
-./scripts/benchmark/run-fides-simple.sh
+./fides-examples/run.sh simple
 ```
 
 The Job requests one GPU on `hht-k8s-staging-22`. If the evaluator Deployment
@@ -210,7 +210,7 @@ the test:
 
 ```sh
 kubectl -n he-dev scale deployment/he-evaluator-gpu --replicas=0
-./scripts/benchmark/run-fides-simple.sh
+./fides-examples/run.sh simple
 kubectl -n he-dev scale deployment/he-evaluator-gpu --replicas=1
 kubectl -n he-dev rollout status deployment/he-evaluator-gpu --timeout=15m
 ```
