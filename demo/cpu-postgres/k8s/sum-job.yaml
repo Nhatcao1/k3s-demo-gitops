@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   generateName: he-salary-sum-
-  namespace: he-dev
+  namespace: ${DEMO_NAMESPACE}
   labels:
     app.kubernetes.io/name: he-salary-sum
     app.kubernetes.io/part-of: cpu-postgres-demo
@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: secretless-sum-evaluator
-          image: docker.io/dockerboi99/he_k8s:cpu-latest
+          image: ${DEMO_HE_IMAGE}
           imagePullPolicy: Always
           command:
             - python

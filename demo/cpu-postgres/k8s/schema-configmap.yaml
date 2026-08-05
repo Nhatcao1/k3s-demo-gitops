@@ -2,20 +2,27 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cpu-postgres-demo-schema
-  namespace: he-dev
+  namespace: ${DEMO_NAMESPACE}
   labels:
     app.kubernetes.io/part-of: cpu-postgres-demo
 data:
   schema.sql: |
     CREATE TABLE IF NOT EXISTS he_demo_sessions (
       session_id varchar(128) PRIMARY KEY,
+      scheme varchar(4) NOT NULL CHECK (scheme IN ('ckks', 'bgv')),
       status varchar(16) NOT NULL CHECK (
         status IN ('INITIALIZED', 'SUMMED', 'MULTIPLIED', 'VERIFIED')
       ),
       valid_count integer NOT NULL CHECK (valid_count BETWEEN 1 AND 8192),
+      kpi_scale integer NOT NULL CHECK (kpi_scale > 0),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );
+
+    ALTER TABLE he_demo_sessions
+      ADD COLUMN IF NOT EXISTS scheme varchar(4) NOT NULL DEFAULT 'ckks';
+    ALTER TABLE he_demo_sessions
+      ADD COLUMN IF NOT EXISTS kpi_scale integer NOT NULL DEFAULT 10;
 
     CREATE TABLE IF NOT EXISTS he_demo_artifacts (
       session_id varchar(128) NOT NULL REFERENCES he_demo_sessions(session_id)

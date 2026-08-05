@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cpu-postgres-demo
-  namespace: he-dev
+  namespace: ${DEMO_NAMESPACE}
   labels:
     app.kubernetes.io/name: cpu-postgres-demo-db
     app.kubernetes.io/part-of: cpu-postgres-demo
@@ -18,7 +18,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: cpu-postgres-demo
-  namespace: he-dev
+  namespace: ${DEMO_NAMESPACE}
   labels:
     app.kubernetes.io/name: cpu-postgres-demo-db
     app.kubernetes.io/part-of: cpu-postgres-demo
@@ -37,7 +37,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: postgres
-          image: postgres:17-alpine
+          image: ${DEMO_POSTGRES_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - name: postgres
@@ -90,13 +90,13 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 2Gi
+            storage: ${DEMO_POSTGRES_STORAGE}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: cpu-postgres-demo-db
-  namespace: he-dev
+  namespace: ${DEMO_NAMESPACE}
   labels:
     app.kubernetes.io/part-of: cpu-postgres-demo
 spec:

@@ -1,32 +1,25 @@
 #!/bin/sh
 set -eu
 
-namespace=he-dev
-mode=${1:---jobs}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+demo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
+. "${DEMO_ENV_FILE:-$demo_dir/demo.env}"
 
-case "$mode" in
-  --jobs)
-    kubectl -n "$namespace" delete job \
-      -l app.kubernetes.io/part-of=cpu-postgres-demo --ignore-not-found
-    ;;
-  --all)
-    kubectl -n "$namespace" delete job \
-      -l app.kubernetes.io/part-of=cpu-postgres-demo --ignore-not-found
-    kubectl -n "$namespace" delete statefulset cpu-postgres-demo \
-      --ignore-not-found
-    kubectl -n "$namespace" delete service cpu-postgres-demo \
-      --ignore-not-found
-    kubectl -n "$namespace" delete networkpolicy cpu-postgres-demo-db \
-      --ignore-not-found
-    kubectl -n "$namespace" delete configmap \
-      cpu-postgres-demo-config cpu-postgres-demo-schema --ignore-not-found
-    kubectl -n "$namespace" delete secret \
-      cpu-postgres-demo-db cpu-postgres-demo-input --ignore-not-found
-    kubectl -n "$namespace" delete pvc database-cpu-postgres-demo-0 \
-      --ignore-not-found
-    ;;
-  *)
-    echo "Usage: $0 [--jobs|--all]" >&2
-    exit 2
-    ;;
-esac
+kubectl -n "$DEMO_NAMESPACE" delete job \
+  -l app.kubernetes.io/part-of=cpu-postgres-demo --ignore-not-found
+
+if [ "${1:-}" = "--all" ]; then
+  kubectl -n "$DEMO_NAMESPACE" delete statefulset cpu-postgres-demo \
+    --ignore-not-found
+  kubectl -n "$DEMO_NAMESPACE" delete service cpu-postgres-demo \
+    --ignore-not-found
+  kubectl -n "$DEMO_NAMESPACE" delete networkpolicy cpu-postgres-demo-db \
+    --ignore-not-found
+  kubectl -n "$DEMO_NAMESPACE" delete configmap \
+    cpu-postgres-demo-config cpu-postgres-demo-schema --ignore-not-found
+  kubectl -n "$DEMO_NAMESPACE" delete secret \
+    cpu-postgres-demo-db cpu-postgres-demo-input cpu-postgres-demo-key \
+    --ignore-not-found
+  kubectl -n "$DEMO_NAMESPACE" delete pvc database-cpu-postgres-demo-0 \
+    --ignore-not-found
+fi

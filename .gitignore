@@ -7,3 +7,5 @@
 *.rendered.yaml
 *-secret.yaml
 private-key*
+secret-key*
+/demo/cpu-postgres/salaries.csv

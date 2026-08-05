@@ -1,0 +1,10 @@
+flowchart LR
+    A[CSV salaries + KPI] --> B[Initialize Job]
+    B --> C[Create context and keys]
+    C --> D[Encrypt salaries and KPI]
+    D --> E[(PostgreSQL)]
+    E --> F[SUM Job]
+    F --> E
+    E --> G[Multiply Job]
+    G --> E
+    E --> H[Verify Job uses secret key]
