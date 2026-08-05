@@ -18,6 +18,7 @@ apps/he/               older gateway manifests; do not apply in this phase
 argocd/                saved for the later Argo CD phase
 benchmarks/he/          benchmark sizes and operation matrix
 scripts/benchmark/      prepare, run, and direct-deployment helpers
+scripts/argocd/         paused repository, registry, bootstrap, promotion helpers
 config/he-lab.env       namespace, images, services, and URLs
 k8s/                    renderable CPU/GPU and benchmark YAML templates
 jobs/                   simple non-benchmark CPU/GPU submission Jobs

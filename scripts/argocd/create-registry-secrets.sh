@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+# Only the paused Argo overlay uses the private GitLab registry. The current
+# direct CPU/GPU manifests pull public Docker Hub images and do not need this.
+
 if [ -z "${REGISTRY_USER:-}" ]; then
   printf "GitLab deploy-token username: "
   IFS= read -r REGISTRY_USER

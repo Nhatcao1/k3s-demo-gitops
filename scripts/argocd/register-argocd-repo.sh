@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+# Register the private GitLab repository only when the Argo CD phase resumes.
+
 private_key=${1:-"$HOME/.ssh/id_ed25519_argocd_gitops"}
 
 if [ ! -f "$private_key" ]; then

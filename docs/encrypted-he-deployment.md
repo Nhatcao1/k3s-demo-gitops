@@ -57,7 +57,6 @@ the GPU result is accepted only after verification on the NVIDIA server.
 ## Direct run order
 
 ```sh
-./scripts/create-registry-secrets.sh
 ./scripts/benchmark/deploy-cpu-service.sh
 
 ./scripts/benchmark/run-he-bench.sh cpu primitive 50000

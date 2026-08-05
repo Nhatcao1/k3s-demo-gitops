@@ -19,7 +19,7 @@ if [ "${#tag}" -lt 8 ] || [ "${#tag}" -gt 40 ]; then
   exit 2
 fi
 
-repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 file="$repo_dir/apps/he/overlays/dev/kustomization.yaml"
 temporary_file=$(mktemp)
 trap 'rm -f "$temporary_file"' EXIT HUP INT TERM
