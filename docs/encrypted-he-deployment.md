@@ -51,8 +51,8 @@ For each operation and input size, keep:
 - maximum CKKS absolute/relative error;
 - PASS/FAIL, chunk count, and confirmation that no secret key was sent.
 
-Sizes are `50k`, `100k`, `500k`, `1m`, and `10m`. Run CPU and GPU separately
-when GPU transport becomes available.
+Sizes are `50k`, `100k`, `500k`, `1m`, and `10m`. Run CPU and GPU separately;
+the GPU result is accepted only after verification on the NVIDIA server.
 
 ## Direct run order
 
@@ -82,7 +82,8 @@ Detailed commands are in `docs/he-benchmark-commands.md`.
 - [ ] Run and retain 50k CPU primitive/SUM evidence on the K3s server.
 - [ ] Run representative larger sizes, ending with 10m.
 - [ ] Inspect evaluator logs for plaintext, secret keys, or request payloads.
-- [ ] Add GPU Job after FIDESlib ciphertext transport works.
+- [x] Add the GPU evaluator transport and benchmark Job.
+- [ ] Run and retain the 50k GPU primitive/SUM evidence on the NVIDIA server.
 - [ ] Return to immutable tags and Argo CD after direct acceptance.
 
 ## CPU acceptance

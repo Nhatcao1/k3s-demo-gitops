@@ -53,7 +53,24 @@ separate processes:
 | Target | Runtime | Current state |
 | --- | --- | --- |
 | CPU | standard OpenFHE-Python | service and benchmark available |
-| GPU | FIDESlib with its patched OpenFHE | image/backend started; remote ciphertext transport incomplete |
+| GPU | FIDESlib with its patched OpenFHE | API/worker transport implemented; NVIDIA server verification pending |
+
+High-level GPU file flow:
+
+```mermaid
+flowchart LR
+    HE["gpu/worker/src/fides_backend.cpp<br/>add, subtract, multiply, sum"]
+    WORKER["gpu/worker/src/main.cpp<br/>connects API to FIDESlib backend"]
+    API["gpu/api/app.py<br/>exposes /v1/evaluate"]
+    IMAGE["gpu/Dockerfile<br/>packages API + worker + FIDESlib"]
+    CI[".gitlab-ci.yml<br/>builds gpu-latest"]
+    K8S["k8s/gpu-evaluator.yaml<br/>deploys GPU API Service"]
+    CLIENT["service_benchmark.py<br/>or another trusted client"]
+
+    HE --> WORKER --> API --> IMAGE --> CI --> K8S
+    CLIENT -->|"HTTP request"| K8S
+    K8S -->|"encrypted response"| CLIENT
+```
 
 Standard OpenFHE and FIDESlib's patched OpenFHE must never be linked into the
 same image or process. A successful CUDA image build is not a GPU benchmark.
@@ -85,7 +102,7 @@ The test sizes are:
 ```
 
 Inputs are deterministic and processed in CKKS-sized chunks so CPU and GPU
-can later run comparable workloads without loading 10 million Python values
+can run comparable workloads without loading 10 million Python values
 at once.
 
 ## Current SUM limitation
@@ -123,5 +140,5 @@ Before adding another HE function:
 4. Timings and accuracy are saved in a reviewable JSON result.
 5. The fully encrypted cross-chunk SUM behavior is either implemented or its
    client-side final aggregation remains clearly labelled.
-6. GPU performance is not compared until FIDESlib transport and verification
-   work end to end.
+6. GPU performance is not accepted until the FIDESlib request/response path
+   passes decryption and correctness checks on the NVIDIA server.

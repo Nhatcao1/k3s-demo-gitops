@@ -65,6 +65,7 @@ SUM limitation are summarized in
 Data preparation and the 50k, 100k, 500k, 1m, and 10m commands are in
 [docs/he-benchmark-commands.md](docs/he-benchmark-commands.md).
 
-The CPU benchmarks run as Kubernetes Jobs, call `/v1/evaluate`, and compare
-each HE operation with its Python baseline. GPU service testing waits for
-FIDESlib ciphertext transport.
+CPU and GPU benchmarks run as Kubernetes Jobs, call their separate
+`/v1/evaluate` Services, and compare each HE operation with its Python
+baseline. The GPU path is implemented but remains experimental until it passes
+on the target NVIDIA server.
