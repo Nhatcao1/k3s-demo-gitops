@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${BENCH_JOB_NAME}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-service-benchmark
+    workload: ${BENCH_WORKLOAD}
+    backend: ${BENCH_BACKEND}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: ${BENCH_JOB_TIMEOUT_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-service-benchmark
+        workload: ${BENCH_WORKLOAD}
+        backend: ${BENCH_BACKEND}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: benchmark-client
+          image: ${BENCH_CLIENT_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - python
+            - /benchmark/service_benchmark.py
+          args:
+            - --url
+            - ${BENCH_SERVICE_URL}
+            - --workload
+            - ${BENCH_WORKLOAD}
+            - --value-count
+            - "${BENCH_VALUE_COUNT}"
+            - --batch-size
+            - "${BENCH_BATCH_SIZE}"
+            - --repetitions
+            - "${BENCH_REPETITIONS}"
+            - --timeout
+            - "${BENCH_REQUEST_TIMEOUT_SECONDS}"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: benchmark-code
+              mountPath: /benchmark
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: benchmark-code
+          configMap:
+            name: he-service-benchmark-code
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 2Gi

@@ -19,81 +19,30 @@ case "$image_tag" in
 esac
 
 namespace=$HE_NAMESPACE
-image="$HE_IMAGE_REPOSITORY:$image_tag"
+if [ "$#" -eq 1 ]; then
+  image="$HE_IMAGE_REPOSITORY:$image_tag"
+else
+  image=$HE_GPU_IMAGE
+fi
 deployment=$HE_GPU_DEPLOYMENT
 service=$HE_GPU_SERVICE
+template="$repo_dir/k8s/gpu-evaluator.yaml"
+renderer="$repo_dir/scripts/render-he-yaml.py"
+
+command -v python3 >/dev/null 2>&1 || {
+  echo "python3 is required to render $template." >&2
+  exit 1
+}
+
+HE_GPU_IMAGE=$image
+export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT
 
 kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
 
-kubectl apply -f - <<YAML
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: $deployment
-  namespace: $namespace
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: $deployment
-  template:
-    metadata:
-      labels:
-        app: $deployment
-    spec:
-      containers:
-        - name: $deployment
-          image: $image
-          imagePullPolicy: Always
-          ports:
-            - name: http
-              containerPort: $HE_SERVICE_PORT
-          env:
-            - name: MAX_ARTIFACT_BYTES
-              value: "268435456"
-            - name: MAX_REQUEST_BYTES
-              value: "805306368"
-            - name: HE_GPU_WORKER_TIMEOUT_SECONDS
-              value: "600"
-          resources:
-            requests:
-              cpu: "2"
-              memory: 4Gi
-              nvidia.com/gpu: "1"
-            limits:
-              cpu: "8"
-              memory: 16Gi
-              nvidia.com/gpu: "1"
-          startupProbe:
-            httpGet:
-              path: /readyz
-              port: http
-            periodSeconds: 10
-            failureThreshold: 60
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: http
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: http
-            periodSeconds: 30
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: $service
-  namespace: $namespace
-spec:
-  selector:
-    app: $deployment
-  ports:
-    - name: http
-      port: $HE_SERVICE_PORT
-      targetPort: http
-YAML
+python3 "$renderer" "$template" | kubectl apply -f -
+
+# A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
+kubectl -n "$namespace" rollout restart "deployment/$deployment"
 
 kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=15m

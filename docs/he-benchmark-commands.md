@@ -19,12 +19,18 @@ All benchmark and direct-deployment scripts live together:
 ```text
 scripts/benchmark/
 ├── deploy-cpu-service.sh
+├── deploy-gpu-service.sh
 ├── run-he-bench.sh
 ├── service_benchmark.py
 ├── primitives.py
 ├── payment_diff_sum_mean.py
 ├── prepare-he-bench-data.sh
 └── prepare_full_installments_columns.py
+
+k8s/
+├── cpu-evaluator.yaml
+├── gpu-evaluator.yaml
+└── benchmark-job.yaml
 ```
 
 `service_benchmark.py` is the active implementation. The small
@@ -34,6 +40,30 @@ service benchmark implementation.
 Shared non-secret K3s settings are in `config/he-lab.env`. Change that one file
 before pushing if the namespace, Docker Hub images, or Service names differ on
 another server.
+
+The YAML files are normal tracked templates. `${HE_...}` values come from
+`config/he-lab.env`; `${BENCH_...}` values come from the benchmark command.
+The scripts render them with `scripts/render-he-yaml.py` and pipe the result to
+`kubectl`. Edit resource requests, limits, probes, and volume mounts directly
+in the YAML files rather than inside shell code.
+
+For example, changing these values in `config/he-lab.env` updates every deploy
+and benchmark command:
+
+```sh
+: "${HE_NAMESPACE:=he-dev}"
+: "${HE_CPU_IMAGE_TAG:=cpu-latest}"
+: "${HE_GPU_IMAGE_TAG:=gpu-latest}"
+: "${HE_CPU_SERVICE:=he-evaluator}"
+: "${HE_GPU_SERVICE:=he-evaluator-gpu}"
+```
+
+An exported shell value still overrides the tracked default for one run:
+
+```sh
+HE_NAMESPACE=he-trial \
+  ./scripts/benchmark/deploy-cpu-service.sh
+```
 
 ## 1. Deploy or refresh the CPU service
 
@@ -79,9 +109,23 @@ First run the manual `build-fides-evaluator-gpu` GitLab job. After the
 working:
 
 ```sh
+kubectl get nodes \
+  -o custom-columns='NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu'
+
 ./scripts/benchmark/deploy-gpu-service.sh
+kubectl -n he-dev rollout status deployment/he-evaluator-gpu --timeout=15m
+
 ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
 ./scripts/benchmark/run-he-bench.sh gpu sum 50000
+```
+
+The benchmark command does not create the evaluator. If it reports that
+`he-evaluator-gpu` is not found, run `deploy-gpu-service.sh` first. If the GPU
+Deployment stays Pending, inspect it with:
+
+```sh
+kubectl -n he-dev get pods -l app=he-evaluator-gpu
+kubectl -n he-dev describe pods -l app=he-evaluator-gpu
 ```
 
 The benchmark Job is still the trusted standard OpenFHE-Python client. It sends
@@ -157,4 +201,5 @@ kubectl -n he-dev logs job/<job-name>
 kubectl -n he-dev describe job/<job-name>
 ```
 
-GPU remains disabled until FIDESlib remote ciphertext transport is complete.
+GPU remains experimental until the FIDESlib image and remote ciphertext path
+pass on the target NVIDIA server.

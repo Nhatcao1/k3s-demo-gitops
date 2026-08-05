@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${HE_CPU_DEPLOYMENT}
+  namespace: ${HE_NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${HE_CPU_DEPLOYMENT}
+  template:
+    metadata:
+      labels:
+        app: ${HE_CPU_DEPLOYMENT}
+    spec:
+      containers:
+        - name: ${HE_CPU_DEPLOYMENT}
+          image: ${HE_CPU_IMAGE}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: ${HE_SERVICE_PORT}
+          env:
+            - name: MAX_ARTIFACT_BYTES
+              value: "268435456"
+            - name: MAX_REQUEST_BYTES
+              value: "536870912"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${HE_CPU_SERVICE}
+  namespace: ${HE_NAMESPACE}
+spec:
+  selector:
+    app: ${HE_CPU_DEPLOYMENT}
+  ports:
+    - name: http
+      port: ${HE_SERVICE_PORT}
+      targetPort: http

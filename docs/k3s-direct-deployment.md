@@ -1,7 +1,7 @@
 # Direct K3s deployment commands
 
-Argo CD is intentionally skipped for this phase. These commands deploy the
-CPU OpenFHE evaluator directly with `kubectl`.
+Argo CD is intentionally skipped for this phase. The helper scripts apply
+tracked Kubernetes templates directly with `kubectl`.
 
 One Deployment and one ClusterIP Service handle all four operations:
 `add`, `subtract`, `multiply`, and `sum`. Do not create separate primitive and
@@ -10,14 +10,24 @@ SUM services.
 ## 1. Select the application image
 
 The tracked non-secret defaults are in `config/he-lab.env`. Edit that file
-before pushing when the target namespace, image repository, or tags change.
-The default CPU image is:
+before pushing when the namespace, image repository, tags, Deployment names,
+Service names, or port change. The scripts use those values automatically:
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
-
-export HE_IMAGE="docker.io/dockerboi99/he_k8s:cpu-latest"
+sed -n '1,200p' config/he-lab.env
 ```
+
+The actual resources are in:
+
+```text
+k8s/cpu-evaluator.yaml
+k8s/gpu-evaluator.yaml
+k8s/benchmark-job.yaml
+```
+
+Edit resources, probes, and volumes in YAML. Do not put Kubernetes YAML back
+inside the shell scripts.
 
 ## 2. Create the namespace
 
@@ -36,34 +46,14 @@ The short repeatable command is:
 ./scripts/benchmark/deploy-cpu-service.sh
 ```
 
-It performs the Deployment, resource, Service, and rollout commands shown
-below and sets `imagePullPolicy: Always` so `cpu-latest` is refreshed from
-Docker Hub instead of using a stale node cache.
+It renders `k8s/cpu-evaluator.yaml` using `config/he-lab.env`, applies the
+Deployment and Service, and restarts the Deployment so a moving `cpu-latest`
+tag is pulled again.
 
-```sh
-kubectl -n he-dev create deployment he-evaluator-cpu \
-  --image="$HE_IMAGE" \
-  --port=8080 \
-  --dry-run=client -o yaml | kubectl apply -f -
+## 4. Stable in-cluster Service
 
-kubectl -n he-dev set image deployment/he-evaluator-cpu \
-  "he-evaluator-cpu=$HE_IMAGE"
-
-kubectl -n he-dev set resources deployment/he-evaluator-cpu \
-  --requests=cpu=1,memory=2Gi \
-  --limits=cpu=4,memory=8Gi
-
-kubectl -n he-dev rollout status deployment/he-evaluator-cpu \
-  --timeout=10m
-```
-
-## 4. Create the stable in-cluster Service
-
-```sh
-kubectl -n he-dev create service clusterip he-evaluator \
-  --tcp=8080:8080 \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
+The same CPU YAML creates the ClusterIP Service. No separate Service command
+is needed.
 
 Pods and benchmark Jobs inside `he-dev` use this stable URL:
 
@@ -138,3 +128,19 @@ Run the implemented benchmark Jobs with:
 
 They call `http://he-evaluator:8080/v1/evaluate` from inside `he-dev`. Argo CD
 will be reintroduced only after the direct CPU deployment and benchmarks pass.
+
+## GPU deployment
+
+The GPU path follows the same pattern and reads its values from
+`config/he-lab.env`:
+
+```sh
+kubectl get nodes \
+  -o custom-columns='NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu'
+
+./scripts/benchmark/deploy-gpu-service.sh
+./scripts/benchmark/run-he-bench.sh gpu primitive 50000
+```
+
+`k8s/gpu-evaluator.yaml` requests one `nvidia.com/gpu`. It cannot become Ready
+unless K3s advertises that resource and the configured GPU image exists.

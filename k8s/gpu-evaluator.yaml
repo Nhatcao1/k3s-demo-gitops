@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${HE_GPU_DEPLOYMENT}
+  namespace: ${HE_NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${HE_GPU_DEPLOYMENT}
+  template:
+    metadata:
+      labels:
+        app: ${HE_GPU_DEPLOYMENT}
+    spec:
+      containers:
+        - name: ${HE_GPU_DEPLOYMENT}
+          image: ${HE_GPU_IMAGE}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: ${HE_SERVICE_PORT}
+          env:
+            - name: MAX_ARTIFACT_BYTES
+              value: "268435456"
+            - name: MAX_REQUEST_BYTES
+              value: "805306368"
+            - name: HE_GPU_WORKER_TIMEOUT_SECONDS
+              value: "600"
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${HE_GPU_SERVICE}
+  namespace: ${HE_NAMESPACE}
+spec:
+  selector:
+    app: ${HE_GPU_DEPLOYMENT}
+  ports:
+    - name: http
+      port: ${HE_SERVICE_PORT}
+      targetPort: http

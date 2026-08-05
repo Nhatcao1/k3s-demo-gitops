@@ -27,12 +27,12 @@ log. The evaluator receives no plaintext input.
 
 | Component | Location | Status |
 | --- | --- | --- |
-| CPU evaluator Deployment and ClusterIP Service | `scripts/benchmark/deploy-cpu-service.sh` | implemented |
+| CPU evaluator Deployment and ClusterIP Service | `k8s/cpu-evaluator.yaml` via `deploy-cpu-service.sh` | implemented |
 | Service benchmark client | `scripts/benchmark/service_benchmark.py` | implemented |
 | Primitive benchmark Job | `scripts/benchmark/run-he-bench.sh cpu primitive ...` | implemented |
 | SUM benchmark Job | `scripts/benchmark/run-he-bench.sh cpu sum ...` | implemented |
-| GPU evaluator Deployment and Service | `scripts/benchmark/deploy-gpu-service.sh` | implemented; server verification pending |
-| GPU remote benchmark | `scripts/benchmark/run-he-bench.sh gpu ...` | implemented; server verification pending |
+| GPU evaluator Deployment and Service | `k8s/gpu-evaluator.yaml` via `deploy-gpu-service.sh` | implemented; server verification pending |
+| CPU/GPU benchmark Job | `k8s/benchmark-job.yaml` via `run-he-bench.sh` | implemented; GPU server verification pending |
 | Argo CD reconciliation | `argocd/` | intentionally paused |
 
 The CPU evaluator and trusted benchmark client currently use the same standard

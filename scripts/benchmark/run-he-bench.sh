@@ -63,6 +63,13 @@ request_timeout=${REQUEST_TIMEOUT_SECONDS:-300}
 job_timeout=${BENCH_JOB_TIMEOUT_SECONDS:-43200}
 run_id=${RUN_ID:-"$(date -u +%Y%m%d%H%M%S)"}
 output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/${backend}_${workload}_$run_id"}
+template="$repo_dir/k8s/benchmark-job.yaml"
+renderer="$repo_dir/scripts/render-he-yaml.py"
+
+command -v python3 >/dev/null 2>&1 || {
+  echo "python3 is required to render $template." >&2
+  exit 1
+}
 
 kubectl -n "$namespace" get deployment "$evaluator_deployment" >/dev/null
 kubectl -n "$namespace" get service "$evaluator_service" >/dev/null
@@ -78,79 +85,22 @@ run_one() {
   job_name="he-bench-${backend}-${workload}-${size}-${run_id}"
 
   kubectl delete job "$job_name" -n "$namespace" --ignore-not-found >/dev/null
-  kubectl apply -f - <<YAML
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: $job_name
-  namespace: $namespace
-  labels:
-    app: he-service-benchmark
-    workload: $workload
-    backend: $backend
-spec:
-  backoffLimit: 0
-  activeDeadlineSeconds: $job_timeout
-  template:
-    metadata:
-      labels:
-        app: he-service-benchmark
-        workload: $workload
-        backend: $backend
-    spec:
-      restartPolicy: Never
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 10001
-        runAsGroup: 10001
-        fsGroup: 10001
-      containers:
-        - name: benchmark-client
-          image: $client_image
-          imagePullPolicy: Always
-          command:
-            - python
-            - /benchmark/service_benchmark.py
-          args:
-            - --url
-            - $service_url
-            - --workload
-            - $workload
-            - --value-count
-            - "$size"
-            - --batch-size
-            - "$batch_size"
-            - --repetitions
-            - "$repetitions"
-            - --timeout
-            - "$request_timeout"
-          resources:
-            requests:
-              cpu: "1"
-              memory: 2Gi
-            limits:
-              cpu: "2"
-              memory: 4Gi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: benchmark-code
-              mountPath: /benchmark
-              readOnly: true
-            - name: temporary-files
-              mountPath: /tmp
-      volumes:
-        - name: benchmark-code
-          configMap:
-            name: he-service-benchmark-code
-        - name: temporary-files
-          emptyDir:
-            sizeLimit: 2Gi
-YAML
+  BENCH_JOB_NAME=$job_name
+  BENCH_BACKEND=$backend
+  BENCH_WORKLOAD=$workload
+  BENCH_CLIENT_IMAGE=$client_image
+  BENCH_SERVICE_URL=$service_url
+  BENCH_VALUE_COUNT=$size
+  BENCH_BATCH_SIZE=$batch_size
+  BENCH_REPETITIONS=$repetitions
+  BENCH_REQUEST_TIMEOUT_SECONDS=$request_timeout
+  BENCH_JOB_TIMEOUT_SECONDS=$job_timeout
+  export HE_NAMESPACE BENCH_JOB_NAME BENCH_BACKEND BENCH_WORKLOAD
+  export BENCH_CLIENT_IMAGE BENCH_SERVICE_URL BENCH_VALUE_COUNT
+  export BENCH_BATCH_SIZE BENCH_REPETITIONS BENCH_REQUEST_TIMEOUT_SECONDS
+  export BENCH_JOB_TIMEOUT_SECONDS
+
+  python3 "$renderer" "$template" | kubectl create -f -
 
   if ! kubectl wait --for=condition=complete "job/$job_name" \
     -n "$namespace" --timeout="${job_timeout}s"; then
