@@ -29,7 +29,18 @@ spec:
           imagePullPolicy: Always
           command:
             - python
-            - /benchmark/service_benchmark.py
+            - -c
+            - |
+              import gzip
+              import os
+              import sys
+
+              source = "/benchmark/service_benchmark.py.gz"
+              target = "/tmp/service_benchmark.py"
+              with gzip.open(source, "rb") as compressed:
+                  with open(target, "wb") as unpacked:
+                      unpacked.write(compressed.read())
+              os.execv(sys.executable, [sys.executable, target, *sys.argv[1:]])
           args:
             - --url
             - ${BENCH_SERVICE_URL}

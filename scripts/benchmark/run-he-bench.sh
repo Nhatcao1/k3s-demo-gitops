@@ -71,11 +71,21 @@ command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render $template." >&2
   exit 1
 }
+command -v gzip >/dev/null 2>&1 || {
+  echo "gzip is required to package the benchmark client." >&2
+  exit 1
+}
 
 he_kubectl -n "$namespace" get deployment "$evaluator_deployment" >/dev/null
 he_kubectl -n "$namespace" get service "$evaluator_service" >/dev/null
+
+# Compress the client before sending it through the Kubernetes API. This keeps
+# the ConfigMap request small for lab clusters exposed through strict proxies.
+benchmark_archive=$(mktemp)
+trap 'rm -f "$benchmark_archive"' EXIT HUP INT TERM
+gzip -c "$script_dir/service_benchmark.py" > "$benchmark_archive"
 he_kubectl -n "$namespace" create configmap he-service-benchmark-code \
-  --from-file=service_benchmark.py="$script_dir/service_benchmark.py" \
+  --from-file=service_benchmark.py.gz="$benchmark_archive" \
   --dry-run=client -o yaml |
   he_kubectl apply -f -
 
