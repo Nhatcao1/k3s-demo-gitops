@@ -15,6 +15,9 @@ data:
       ),
       valid_count integer NOT NULL CHECK (valid_count BETWEEN 1 AND 8192),
       kpi_scale integer NOT NULL CHECK (kpi_scale > 0),
+      expected_amount numeric NOT NULL,
+      decrypted_amount numeric,
+      absolute_error numeric CHECK (absolute_error >= 0),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );
@@ -23,6 +26,12 @@ data:
       ADD COLUMN IF NOT EXISTS scheme varchar(4) NOT NULL DEFAULT 'ckks';
     ALTER TABLE he_demo_sessions
       ADD COLUMN IF NOT EXISTS kpi_scale integer NOT NULL DEFAULT 10;
+    ALTER TABLE he_demo_sessions
+      ADD COLUMN IF NOT EXISTS expected_amount numeric;
+    ALTER TABLE he_demo_sessions
+      ADD COLUMN IF NOT EXISTS decrypted_amount numeric;
+    ALTER TABLE he_demo_sessions
+      ADD COLUMN IF NOT EXISTS absolute_error numeric;
 
     CREATE TABLE IF NOT EXISTS he_demo_artifacts (
       session_id varchar(128) NOT NULL REFERENCES he_demo_sessions(session_id)
