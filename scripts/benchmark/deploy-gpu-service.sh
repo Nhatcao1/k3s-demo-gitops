@@ -48,7 +48,16 @@ he_kubectl apply -f "$rendered_yaml"
 # A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
 he_kubectl -n "$namespace" rollout restart "deployment/$deployment"
 
-he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
-  --timeout=15m
+if ! he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
+  --timeout=15m; then
+  echo "GPU rollout failed; pod status and startup logs follow:" >&2
+  he_kubectl -n "$namespace" get pods -l "app=$deployment" -o wide || true
+  he_kubectl -n "$namespace" logs -l "app=$deployment" \
+    --all-containers=true --prefix=true --tail=200 || true
+  exit 1
+fi
+
+he_kubectl -n "$namespace" logs -l "app=$deployment" \
+  --all-containers=true --prefix=true --tail=20 || true
 
 echo "GPU evaluator: http://$service:$HE_SERVICE_PORT"

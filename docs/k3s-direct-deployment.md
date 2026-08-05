@@ -156,6 +156,21 @@ kubectl get nodes \
 ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
 ```
 
+The GPU container now checks the NVIDIA driver and device count before starting
+the HTTP API. The deploy script prints pod logs automatically when startup or
+rollout fails. This avoids relying on `kubectl exec`, which may be blocked by a
+cluster proxy that does not support streaming upgrade connections.
+
+For an evaluation error after a successful startup, inspect the worker detail:
+
+```sh
+kubectl -n he-dev logs -l app=he-evaluator-gpu --tail=200 --prefix=true
+```
+
+`GPU runtime check passed` means Kubernetes and the NVIDIA runtime are working.
+A later `FIDESlib worker exited` line identifies a worker/build or serialized
+artifact compatibility failure.
+
 `k8s/gpu-evaluator.yaml` requests one `nvidia.com/gpu`. It cannot become Ready
 unless K3s advertises that resource and the configured GPU image exists.
 
