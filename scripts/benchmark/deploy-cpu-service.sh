@@ -44,6 +44,12 @@ kubectl -n "$namespace" create service clusterip he-evaluator \
   --dry-run=client -o yaml |
   kubectl apply -f -
 
+# The Service has a stable public name, but it must select the differently
+# named CPU Deployment pods.
+kubectl -n "$namespace" patch service he-evaluator \
+  --type=merge \
+  -p '{"spec":{"selector":{"app":"he-evaluator-cpu"}}}'
+
 kubectl -n "$namespace" rollout restart deployment/he-evaluator-cpu
 
 kubectl -n "$namespace" rollout status deployment/he-evaluator-cpu \
