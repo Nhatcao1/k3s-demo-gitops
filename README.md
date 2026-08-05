@@ -19,6 +19,7 @@ argocd/                saved for the later Argo CD phase
 benchmarks/he/          benchmark sizes and operation matrix
 scripts/benchmark/      prepare, run, and direct-deployment helpers
 config/he-lab.env       namespace, images, services, and URLs
+jobs/                   simple non-benchmark CPU/GPU submission Jobs
 docs/                   benchmark and K3s command runbooks
 ```
 

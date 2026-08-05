@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: he-compute-cpu-
+  namespace: he-dev
+  labels:
+    app: he-compute-submit
+    backend: cpu
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: he-compute-submit
+        backend: cpu
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: request-client
+          image: curlimages/curl:8.15.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--fail-with-body"
+            - "--silent"
+            - "--show-error"
+            - "--header"
+            - "Content-Type: application/json"
+            - "--data-binary"
+            - "@/input/request.json"
+            - "http://he-evaluator:8080/v1/evaluate"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: request
+              mountPath: /input
+              readOnly: true
+      volumes:
+        - name: request
+          configMap:
+            name: he-compute-request
