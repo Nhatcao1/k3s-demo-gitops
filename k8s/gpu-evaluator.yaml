@@ -13,6 +13,20 @@ spec:
       labels:
         app: ${HE_GPU_DEPLOYMENT}
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: ${HE_GPU_NODE_LABEL_KEY}
+                    operator: In
+                    values:
+                      - ${HE_GPU_NODE_LABEL_VALUE}
+      tolerations:
+        - key: ${HE_GPU_TAINT_KEY}
+          operator: Equal
+          value: ${HE_GPU_TAINT_VALUE}
+          effect: ${HE_GPU_TAINT_EFFECT}
       containers:
         - name: ${HE_GPU_DEPLOYMENT}
           image: ${HE_GPU_IMAGE}

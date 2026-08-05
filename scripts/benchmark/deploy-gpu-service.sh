@@ -37,6 +37,8 @@ command -v python3 >/dev/null 2>&1 || {
 
 HE_GPU_IMAGE=$image
 export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT
+export HE_GPU_NODE_LABEL_KEY HE_GPU_NODE_LABEL_VALUE
+export HE_GPU_TAINT_KEY HE_GPU_TAINT_VALUE HE_GPU_TAINT_EFFECT
 
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 

@@ -106,7 +106,8 @@ waits for completion, and copies the Job log to a JSON file under
 
 First run the manual `build-fides-evaluator-gpu` GitLab job. After the
 `dockerboi99/he_k8s:gpu-latest` image is pushed and the K3s NVIDIA device plugin is
-working:
+working, confirm that the node matches the `disktype=ssd` affinity and
+`dedicated=T4:NoSchedule` toleration configured in `config/he-lab.env`:
 
 ```sh
 kubectl get nodes \

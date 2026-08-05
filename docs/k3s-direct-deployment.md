@@ -158,3 +158,21 @@ kubectl get nodes \
 
 `k8s/gpu-evaluator.yaml` requests one `nvidia.com/gpu`. It cannot become Ready
 unless K3s advertises that resource and the configured GPU image exists.
+
+The work-server scheduling defaults are also in `config/he-lab.env`:
+
+```text
+required node label: disktype=ssd
+tolerated node taint: dedicated=T4:NoSchedule
+```
+
+Only the GPU evaluator gets this affinity and toleration. The benchmark client
+does not request a GPU. Confirm the target node before deployment:
+
+```sh
+kubectl get nodes -L disktype
+kubectl describe node <gpu-node-name> | grep -A5 Taints
+```
+
+Change `HE_GPU_NODE_LABEL_*` or `HE_GPU_TAINT_*` in `config/he-lab.env` if a
+different GPU server uses different labels or taints.
