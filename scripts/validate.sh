@@ -27,8 +27,6 @@ test -f "$repo_dir/scripts/render-he-yaml.py"
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
 export HE_SERVICE_PORT
-export HE_GPU_NODE_LABEL_KEY HE_GPU_NODE_LABEL_VALUE
-export HE_GPU_TAINT_KEY HE_GPU_TAINT_VALUE HE_GPU_TAINT_EFFECT
 
 BENCH_JOB_NAME=he-bench-cpu-primitive-50000-validation
 BENCH_BACKEND=cpu
@@ -69,8 +67,8 @@ grep -q "name: $HE_CPU_DEPLOYMENT" "$render_dir/cpu.yaml"
 grep -q "image: $HE_CPU_IMAGE" "$render_dir/cpu.yaml"
 grep -q "name: $HE_GPU_DEPLOYMENT" "$render_dir/gpu.yaml"
 grep -q "image: $HE_GPU_IMAGE" "$render_dir/gpu.yaml"
-grep -q "key: $HE_GPU_NODE_LABEL_KEY" "$render_dir/gpu.yaml"
-grep -q "value: $HE_GPU_TAINT_VALUE" "$render_dir/gpu.yaml"
+grep -q 'key: disktype' "$render_dir/gpu.yaml"
+grep -q 'value: T4' "$render_dir/gpu.yaml"
 grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
 grep -q 'name: he-dev' "$render_dir/argocd.yaml"
 grep -q 'name: he-lab' "$render_dir/argocd.yaml"

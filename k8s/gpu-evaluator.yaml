@@ -18,15 +18,15 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: ${HE_GPU_NODE_LABEL_KEY}
+                  - key: disktype
                     operator: In
                     values:
-                      - ${HE_GPU_NODE_LABEL_VALUE}
+                      - ssd
       tolerations:
-        - key: ${HE_GPU_TAINT_KEY}
+        - key: dedicated
           operator: Equal
-          value: ${HE_GPU_TAINT_VALUE}
-          effect: ${HE_GPU_TAINT_EFFECT}
+          value: T4
+          effect: NoSchedule
       containers:
         - name: ${HE_GPU_DEPLOYMENT}
           image: ${HE_GPU_IMAGE}

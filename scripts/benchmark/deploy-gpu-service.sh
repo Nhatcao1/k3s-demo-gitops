@@ -6,14 +6,6 @@ repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 . "$repo_dir/config/he-lab.env"
 . "$repo_dir/scripts/lib/kubectl.sh"
 
-# Backward-compatible defaults for servers that kept a locally customized
-# he-lab.env while pulling the newer GPU scheduling template.
-: "${HE_GPU_NODE_LABEL_KEY:=disktype}"
-: "${HE_GPU_NODE_LABEL_VALUE:=ssd}"
-: "${HE_GPU_TAINT_KEY:=dedicated}"
-: "${HE_GPU_TAINT_VALUE:=T4}"
-: "${HE_GPU_TAINT_EFFECT:=NoSchedule}"
-
 if [ "$#" -gt 1 ]; then
   echo "Usage: $0 [image-tag]" >&2
   exit 2
@@ -47,8 +39,6 @@ command -v python3 >/dev/null 2>&1 || {
 
 HE_GPU_IMAGE=$image
 export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT
-export HE_GPU_NODE_LABEL_KEY HE_GPU_NODE_LABEL_VALUE
-export HE_GPU_TAINT_KEY HE_GPU_TAINT_VALUE HE_GPU_TAINT_EFFECT
 
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
