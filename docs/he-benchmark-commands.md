@@ -31,6 +31,10 @@ scripts/benchmark/
 `primitives.py` and `payment_diff_sum_mean.py` entry points use the same
 service benchmark implementation.
 
+Shared non-secret K3s settings are in `config/he-lab.env`. Change that one file
+before pushing if the namespace, Docker Hub images, or Service names differ on
+another server.
+
 ## 1. Deploy or refresh the CPU service
 
 Wait for the `k3s-demo-app` GitLab pipeline to publish the CPU `cpu-latest` image,
@@ -121,6 +125,8 @@ export HE_NAMESPACE=he-dev
 export HE_SERVICE_URL=http://he-evaluator:8080/v1/evaluate
 export BENCH_IMAGE=docker.io/dockerboi99/he_k8s:cpu-latest
 ```
+
+These shell overrides take priority over `config/he-lab.env` for one run.
 
 ## Measurements
 

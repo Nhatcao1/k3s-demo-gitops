@@ -18,11 +18,16 @@ apps/he/               older gateway manifests; do not apply in this phase
 argocd/                saved for the later Argo CD phase
 benchmarks/he/          benchmark sizes and operation matrix
 scripts/benchmark/      prepare, run, and direct-deployment helpers
+config/he-lab.env       namespace, images, services, and URLs
 docs/                   benchmark and K3s command runbooks
 ```
 
 All benchmark-related scripts, including direct evaluator deployment, belong
 under `scripts/benchmark/`.
+
+Edit `config/he-lab.env` before pushing when the target namespace, Docker Hub
+repository/tags, Deployment names, or Service names change. It contains no
+secret values.
 
 ## Build first
 

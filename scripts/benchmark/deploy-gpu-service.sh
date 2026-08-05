@@ -1,12 +1,16 @@
 #!/bin/sh
 set -eu
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+. "$repo_dir/config/he-lab.env"
+
 if [ "$#" -gt 1 ]; then
   echo "Usage: $0 [image-tag]" >&2
   exit 2
 fi
 
-image_tag=${1:-gpu-latest}
+image_tag=${1:-$HE_GPU_IMAGE_TAG}
 case "$image_tag" in
   *[!0-9A-Za-z._-]*|"")
     echo "Image tag contains unsupported characters." >&2
@@ -14,8 +18,10 @@ case "$image_tag" in
     ;;
 esac
 
-namespace=${HE_NAMESPACE:-he-dev}
-image="docker.io/dockerboi99/he_k8s:$image_tag"
+namespace=$HE_NAMESPACE
+image="$HE_IMAGE_REPOSITORY:$image_tag"
+deployment=$HE_GPU_DEPLOYMENT
+service=$HE_GPU_SERVICE
 
 kubectl get namespace "$namespace" >/dev/null 2>&1 || kubectl create namespace "$namespace"
 
@@ -23,25 +29,25 @@ kubectl apply -f - <<YAML
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: he-evaluator-gpu
+  name: $deployment
   namespace: $namespace
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: he-evaluator-gpu
+      app: $deployment
   template:
     metadata:
       labels:
-        app: he-evaluator-gpu
+        app: $deployment
     spec:
       containers:
-        - name: he-evaluator-gpu
+        - name: $deployment
           image: $image
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: $HE_SERVICE_PORT
           env:
             - name: MAX_ARTIFACT_BYTES
               value: "268435456"
@@ -78,18 +84,18 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: he-evaluator-gpu
+  name: $service
   namespace: $namespace
 spec:
   selector:
-    app: he-evaluator-gpu
+    app: $deployment
   ports:
     - name: http
-      port: 8080
+      port: $HE_SERVICE_PORT
       targetPort: http
 YAML
 
-kubectl -n "$namespace" rollout status deployment/he-evaluator-gpu \
+kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=15m
 
-echo "GPU evaluator: http://he-evaluator-gpu:8080"
+echo "GPU evaluator: http://$service:$HE_SERVICE_PORT"

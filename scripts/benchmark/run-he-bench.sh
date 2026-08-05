@@ -13,6 +13,7 @@ requested_size=$3
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+. "$repo_dir/config/he-lab.env"
 . "$repo_dir/benchmarks/he/matrix.env"
 
 case "$backend" in
@@ -44,16 +45,16 @@ command -v kubectl >/dev/null 2>&1 || {
   exit 1
 }
 
-namespace=${HE_NAMESPACE:-he-dev}
-client_image=${BENCH_IMAGE:-docker.io/dockerboi99/he_k8s:cpu-latest}
+namespace=$HE_NAMESPACE
+client_image=${BENCH_IMAGE:-$HE_BENCH_CLIENT_IMAGE}
 if [ "$backend" = "cpu" ]; then
-  evaluator_deployment=he-evaluator-cpu
-  evaluator_service=he-evaluator
-  default_service_url=http://he-evaluator:8080/v1/evaluate
+  evaluator_deployment=$HE_CPU_DEPLOYMENT
+  evaluator_service=$HE_CPU_SERVICE
+  default_service_url=$HE_CPU_SERVICE_URL
 else
-  evaluator_deployment=he-evaluator-gpu
-  evaluator_service=he-evaluator-gpu
-  default_service_url=http://he-evaluator-gpu:8080/v1/evaluate
+  evaluator_deployment=$HE_GPU_DEPLOYMENT
+  evaluator_service=$HE_GPU_SERVICE
+  default_service_url=$HE_GPU_SERVICE_URL
 fi
 service_url=${HE_SERVICE_URL:-$default_service_url}
 repetitions=${REPETITIONS:-$DEFAULT_REPETITIONS}

@@ -9,7 +9,9 @@ SUM services.
 
 ## 1. Select the application image
 
-Use the `cpu-latest` image produced from the default branch:
+The tracked non-secret defaults are in `config/he-lab.env`. Edit that file
+before pushing when the target namespace, image repository, or tags change.
+The default CPU image is:
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
