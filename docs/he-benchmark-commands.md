@@ -1,7 +1,8 @@
 # Deployed-service benchmark commands
 
-These benchmarks run as Kubernetes Jobs inside `he-dev` and call only the
-deployed evaluator Service:
+These benchmarks call the already-deployed evaluator Service. For quick CPU
+development, port-forward the Service and run the Python client directly. A
+Kubernetes Job remains available for cluster-side and GPU testing.
 
 ```text
 benchmark client Job
@@ -9,8 +10,9 @@ benchmark client Job
   -> he-evaluator-cpu Deployment
 ```
 
-No Pod IP, port-forward, Argo CD, or OpenFHE installation on the server shell
-is required.
+Neither method redeploys the evaluator. Only
+`scripts/benchmark/deploy-cpu-service.sh` and `deploy-gpu-service.sh` change the
+evaluator Deployments.
 
 ## Benchmark files
 
@@ -84,7 +86,46 @@ kubectl -n he-dev get deployment,pods,service -o wide
 kubectl -n he-dev get service he-evaluator
 ```
 
-## 2. Create and run a small benchmark Job
+## 2. Recommended: run Python directly against the existing CPU service
+
+Install OpenFHE-Python once in a server-side virtual environment:
+
+```sh
+python3 -m venv .venv-he-bench
+. .venv-he-bench/bin/activate
+python -m pip install --upgrade pip
+python -m pip install openfhe
+```
+
+In terminal 1, expose the existing ClusterIP Service only to the local server:
+
+```sh
+kubectl -n he-dev port-forward service/he-evaluator 18080:8080
+```
+
+In terminal 2, activate the same environment and run the client directly:
+
+```sh
+. .venv-he-bench/bin/activate
+
+python scripts/benchmark/service_benchmark.py \
+  --url http://127.0.0.1:18080/v1/evaluate \
+  --workload primitive \
+  --value-count 50000 \
+  --batch-size 8192 \
+  --repetitions 1 \
+  --timeout 300
+
+python scripts/benchmark/service_benchmark.py \
+  --url http://127.0.0.1:18080/v1/evaluate \
+  --workload sum \
+  --value-count 50000
+```
+
+`primitive` runs `add`, `subtract`, and `multiply`. This path creates no new
+Kubernetes Job or ConfigMap. Stop the port-forward with `Ctrl-C` when finished.
+
+## 3. Optional: create and run a benchmark Job
 
 Primitive runs test `add`, `subtract`, and `multiply`:
 
@@ -133,7 +174,7 @@ The benchmark Job is still the trusted standard OpenFHE-Python client. It sends
 the public key to FIDESlib because the GPU backend needs it to load evaluation
 keys, but it never sends the secret key. CPU and GPU remain separate images.
 
-## 3. Run one larger size
+## 4. Run one larger Job size
 
 Allowed sizes are `50000`, `100000`, `500000`, `1000000`, and `10000000`:
 
@@ -142,7 +183,7 @@ Allowed sizes are `50000`, `100000`, `500000`, `1000000`, and `10000000`:
 ./scripts/benchmark/run-he-bench.sh cpu sum 500000
 ```
 
-## 4. Run the complete matrix
+## 5. Run the complete Job matrix
 
 Start this only after both 50k Jobs pass:
 
@@ -151,7 +192,7 @@ Start this only after both 50k Jobs pass:
 ./scripts/benchmark/run-he-bench.sh cpu sum all
 ```
 
-## 5. Repetitions and timeouts
+## 6. Job repetitions and timeouts
 
 ```sh
 REPETITIONS=5 \
@@ -189,10 +230,34 @@ For every operation, the result JSON records:
 - total encrypted end-to-end time and slowdown versus Python;
 - throughput, chunk count, CKKS error, and PASS/FAIL.
 
-The secret key stays only in the benchmark client Job and is never included in
-the HTTP request. Inputs are bounded deterministic values generated one CKKS
-chunk at a time, allowing the 10m test without loading 10m Python values into
-memory simultaneously.
+The secret key stays only in the trusted benchmark client—either the Job or the
+direct local Python process—and is never included in the HTTP request. Inputs
+are bounded deterministic values generated one CKKS chunk at a time, allowing
+the 10m test without loading 10m Python values into memory simultaneously. The
+evaluator is stateless and does not save keys, input ciphertexts, or result
+ciphertexts.
+
+## Ciphertext chaining and lifetime
+
+The existing API can be called repeatedly without redeploying it. A client can
+encrypt `12`, `7`, `8`, and `9` under one CKKS context/keypair, then chain:
+
+```text
+ct12 + ct7  -> ct19
+ct19 + ct8  -> ct27
+ct27 + ct9  -> ct36
+```
+
+The client must keep the same crypto context and secret key in memory and keep
+each returned ciphertext for the next request. The service only evaluates one
+request and returns one serialized ciphertext; it does not currently assign
+ciphertext IDs or provide storage.
+
+`service_benchmark.py` uses temporary files only for OpenFHE serialization.
+Those files are automatically removed, and its keys/ciphertexts disappear when
+the Python process exits. Long-lived ciphertexts would need explicit client-side
+serialization. A secret key must go into protected secret storage, never Git or
+the GitOps data directory.
 
 ## Results and troubleshooting
 
