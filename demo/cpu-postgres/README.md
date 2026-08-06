@@ -1,6 +1,6 @@
 # CPU HE + PostgreSQL demo
 
-Purpose: encrypt salary CSV and KPI, store the HE artifacts in PostgreSQL, calculate encrypted SUM, then encrypted SUM × encrypted KPI.
+Purpose: encrypt salary and per-row KPI values, store the HE artifacts in PostgreSQL, calculate encrypted salary SUM and encrypted `SUM(salary[i] × KPI[i])`.
 
 ## 1. Pull the demo branch
 
@@ -72,32 +72,34 @@ DEMO_SCHEME=bgv
 DEMO_SESSION_ID=salary-bgv-001
 ```
 
-Generate 100 salaries and a random KPI from `0.8` through `1.2` in increments
-defined by `DEMO_KPI_SCALE`:
+Generate 100 rows. Every salary gets a random KPI from
+`0.8, 0.9, 1.0, 1.1, 1.2`:
+
+The KPI choices are set by `DEMO_KPI_VALUES` in `demo.env`.
 
 ```sh
 ./scripts/generate-salaries.sh 100
 ```
 
-To reproduce a run with a fixed KPI, pass it explicitly:
-
-```sh
-./scripts/generate-salaries.sh 100 1.1
-```
-
-Generated input files:
+Generated input file:
 
 ```text
-salaries.csv  # salary values
-input.env     # DEMO_KPI
+salaries.csv  # salary,kpi per row
 ```
 
 Show or edit the plaintext inputs:
 
 ```sh
 head salaries.csv
-cat input.env
 vi salaries.csv
+```
+
+CSV format:
+
+```csv
+salary,kpi
+10000000,0.8
+12500000,1.1
 ```
 
 ## 3. Setup K3s and PostgreSQL
@@ -152,10 +154,10 @@ Show expected plaintext, operations, ciphertexts, context and wrapped key:
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_sum,r.expected_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,CASE artifact_name WHEN '\''salary_ciphertext'\'' THEN '\''encrypted salary vector'\'' WHEN '\''kpi_ciphertext'\'' THEN '\''encrypted repeated KPI vector'\'' WHEN '\''wrapped_secret_key'\'' THEN '\''AES-GCM wrapped lab key; not raw key'\'' ELSE '\''HE metadata or evaluation key'\'' END AS description,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_sum,r.expected_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,CASE artifact_name WHEN '\''salary_ciphertext'\'' THEN '\''encrypted salary vector'\'' WHEN '\''kpi_ciphertext'\'' THEN '\''encrypted per-row KPI vector'\'' WHEN '\''wrapped_secret_key'\'' THEN '\''AES-GCM wrapped lab key; not raw key'\'' ELSE '\''HE metadata or evaluation key'\'' END AS description,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-`expected_sum` and `expected_kpi_amount = expected_sum × KPI` are demo-only
+`expected_sum` and `expected_kpi_amount = SUM(salary[i] × KPI[i])` are demo-only
 plaintext references calculated with exact Python integer and decimal
 arithmetic.
 
@@ -208,7 +210,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_sum,r.decrypted_sum,(r.decrypted_sum-r.expected_sum) AS sum_difference,r.sum_absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT artifact_name,CASE artifact_name WHEN '\''sum_ciphertext'\'' THEN '\''encrypted SUM; copied only by trusted verify-sum Job'\'' ELSE '\''supporting HE artifact'\'' END AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''sum_ciphertext'\'' ORDER BY session_id;"'
 ```
 
-## 7. Multiply encrypted SUM by encrypted KPI
+## 7. Multiply encrypted salary by per-row encrypted KPI, then SUM
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -231,7 +233,7 @@ until the trusted KPI verifier decrypts it:
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_kpi_amount,r.decrypted_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,artifact_name,'\''encrypted SUM multiplied by encrypted KPI'\'' AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''kpi_result_ciphertext'\'' ORDER BY session_id;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_kpi_amount,r.decrypted_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,artifact_name,'\''encrypted SUM of salary[i] multiplied by KPI[i]'\'' AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''kpi_result_ciphertext'\'' ORDER BY session_id;"'
 ```
 
 ## 8. Decrypt and verify the KPI result

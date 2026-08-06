@@ -6,7 +6,6 @@ demo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 . "${DEMO_ENV_FILE:-$demo_dir/demo.env}"
 
 count=${1:-$DEMO_SALARY_COUNT}
-kpi=${2:-}
 output=$DEMO_CSV_FILE
 case "$output" in
   /*) ;;
@@ -21,43 +20,24 @@ if [ "$count" -lt 1 ] || [ "$count" -gt 8192 ]; then
   exit 2
 fi
 
-if ! awk -v minimum="$DEMO_KPI_MIN" -v maximum="$DEMO_KPI_MAX" \
-  'BEGIN { exit !(minimum <= maximum) }'; then
-  echo "DEMO_KPI_MIN must not exceed DEMO_KPI_MAX" >&2
-  exit 2
-fi
-
-if [ -z "$kpi" ]; then
-  kpi=$(awk -v minimum="$DEMO_KPI_MIN" -v maximum="$DEMO_KPI_MAX" \
-    -v scale="$DEMO_KPI_SCALE" 'BEGIN {
-      srand()
-      low = int(minimum * scale + 0.5)
-      high = int(maximum * scale + 0.5)
-      print int(low + rand() * (high - low + 1)) / scale
-    }')
-fi
-if ! awk -v value="$kpi" -v minimum="$DEMO_KPI_MIN" \
-  -v maximum="$DEMO_KPI_MAX" \
-  'BEGIN { exit !(value >= minimum && value <= maximum) }'; then
-  echo "KPI must be between $DEMO_KPI_MIN and $DEMO_KPI_MAX" >&2
+if ! awk -v values="$DEMO_KPI_VALUES" 'BEGIN {
+  count = split(values, choices, ",")
+  if (count < 1) exit 1
+  for (i = 1; i <= count; i++)
+    if (choices[i] !~ /^(0\.8|0\.9|1\.0|1\.1|1\.2)$/) exit 1
+}'; then
+  echo "DEMO_KPI_VALUES must contain only 0.8,0.9,1.0,1.1,1.2" >&2
   exit 2
 fi
 
 awk -v count="$count" -v minimum="$DEMO_SALARY_MIN" \
-  -v maximum="$DEMO_SALARY_MAX" 'BEGIN {
+  -v maximum="$DEMO_SALARY_MAX" -v kpi_values="$DEMO_KPI_VALUES" 'BEGIN {
     srand()
-    print "salary"
+    kpi_count = split(kpi_values, kpis, ",")
+    print "salary,kpi"
     for (i = 0; i < count; i++)
-      print int(minimum + rand() * (maximum - minimum + 1))
+      print int(minimum + rand() * (maximum - minimum + 1)) "," \
+        kpis[int(rand() * kpi_count) + 1]
   }' > "$output"
 
-input_file=$DEMO_INPUT_FILE
-case "$input_file" in
-  /*) ;;
-  *) input_file=$demo_dir/$input_file ;;
-esac
-printf 'DEMO_KPI=%s\n' "$kpi" > "$input_file"
-
 echo "$output"
-echo "$input_file"
-echo "KPI=$kpi"

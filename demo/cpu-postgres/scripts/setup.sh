@@ -6,17 +6,6 @@ demo_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 repo_dir=$(CDPATH= cd -- "$demo_dir/../.." && pwd)
 . "${DEMO_ENV_FILE:-$demo_dir/demo.env}"
 
-input_file=$DEMO_INPUT_FILE
-case "$input_file" in
-  /*) ;;
-  *) input_file=$demo_dir/$input_file ;;
-esac
-test -f "$input_file" || {
-  echo "Run ./scripts/generate-salaries.sh first." >&2
-  exit 1
-}
-. "$input_file"
-
 csv_file=$DEMO_CSV_FILE
 case "$csv_file" in
   /*) ;;
@@ -68,7 +57,6 @@ fi
 
 kube -n "$DEMO_NAMESPACE" create secret generic cpu-postgres-demo-input \
   --from-file=salaries.csv="$csv_file" \
-  --from-literal=DEMO_KPI="$DEMO_KPI" \
   --dry-run=client -o yaml | kube apply -f - >/dev/null
 
 kube -n "$DEMO_NAMESPACE" create configmap cpu-postgres-demo-config \
