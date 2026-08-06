@@ -97,10 +97,15 @@ that file when the mirror caches a moving tag.
 ## Install benchmark dependencies once
 
 ```sh
-./scripts/benchmark/sum/setup.sh
+python3 -m venv .venv-he-sum
+source .venv-he-sum/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r scripts/benchmark/sum/requirements.txt
 ```
 
 This installs only Pandas and NumPy in `.venv-he-sum`, not OpenFHE.
+After installation, either keep the environment active or run `deactivate`;
+`run.sh` calls `.venv-he-sum/bin/python` directly.
 
 ## First 50k run
 

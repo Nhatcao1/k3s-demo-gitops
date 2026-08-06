@@ -8,7 +8,10 @@ repo_dir=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 
 venv="$repo_dir/.venv-he-sum"
 if [ ! -x "$venv/bin/python" ]; then
-  echo "Run ./scripts/benchmark/sum/setup.sh first." >&2
+  echo "Benchmark environment is missing. Run:" >&2
+  echo "  python3 -m venv .venv-he-sum" >&2
+  echo "  source .venv-he-sum/bin/activate" >&2
+  echo "  python3 -m pip install -r scripts/benchmark/sum/requirements.txt" >&2
   exit 1
 fi
 
