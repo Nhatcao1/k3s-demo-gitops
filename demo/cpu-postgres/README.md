@@ -128,18 +128,23 @@ Forwarding from 127.0.0.1:15432 -> 5432
 
 The HE Jobs use the `node3` host network and connect to this forward at `127.0.0.1:15432`.
 
+Run the remaining commands in a second terminal on `node3`.
+
 ## 5. Create context, keys and encrypted inputs
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
+  delete job -l he.demo/stage=initialize --ignore-not-found
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
   create -f rendered/initialize-job.yaml
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  wait --for=condition=complete job \
-  -l he.demo/stage=initialize --timeout=15m
+  logs -f -l he.demo/stage=initialize --all-containers=true \
+  --prefix=true --pod-running-timeout=5m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=initialize --all-containers=true --prefix=true
+  get job -l he.demo/stage=initialize
 ```
 
 Show expected plaintext, operations, ciphertexts, context and wrapped key:
@@ -161,14 +166,17 @@ expected/decrypted/error columns.
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
+  delete job -l he.demo/stage=sum --ignore-not-found
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
   create -f rendered/sum-job.yaml
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  wait --for=condition=complete job \
-  -l he.demo/stage=sum --timeout=15m
+  logs -f -l he.demo/stage=sum --all-containers=true \
+  --prefix=true --pod-running-timeout=5m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=sum --all-containers=true --prefix=true
+  get job -l he.demo/stage=sum
 ```
 
 `sum_ciphertext` is opaque encrypted bytes. PostgreSQL cannot subtract it from
@@ -179,14 +187,17 @@ The SUM evaluator above remains secretless.
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
+  delete job -l he.demo/stage=verify-sum --ignore-not-found
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
   create -f rendered/verify-sum-job.yaml
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  wait --for=condition=complete job \
-  -l he.demo/stage=verify-sum --timeout=15m
+  logs -f -l he.demo/stage=verify-sum --all-containers=true \
+  --prefix=true --pod-running-timeout=5m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=verify-sum --all-containers=true --prefix=true
+  get job -l he.demo/stage=verify-sum
 ```
 
 Calculate the signed SUM difference in PostgreSQL:
@@ -201,14 +212,17 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
+  delete job -l he.demo/stage=multiply --ignore-not-found
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
   create -f rendered/multiply-job.yaml
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  wait --for=condition=complete job \
-  -l he.demo/stage=multiply --timeout=15m
+  logs -f -l he.demo/stage=multiply --all-containers=true \
+  --prefix=true --pod-running-timeout=5m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=multiply --all-containers=true --prefix=true
+  get job -l he.demo/stage=multiply
 ```
 
 Show the new `kpi_result_ciphertext`; the observed KPI amount is still NULL
@@ -224,14 +238,17 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
+  delete job -l he.demo/stage=verify-kpi --ignore-not-found
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
   create -f rendered/verify-job.yaml
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  wait --for=condition=complete job \
-  -l he.demo/stage=verify-kpi --timeout=15m
+  logs -f -l he.demo/stage=verify-kpi --all-containers=true \
+  --prefix=true --pod-running-timeout=5m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=verify-kpi --all-containers=true --prefix=true
+  get job -l he.demo/stage=verify-kpi
 ```
 
 Calculate both signed differences in PostgreSQL:
@@ -265,6 +282,8 @@ Lab only: unwrap and print the raw secret key:
 ```
 
 ## 10. Cleanup
+
+Stop the port-forward with `Ctrl-C` after the HE Jobs finish.
 
 Delete demo Jobs before starting a new session; change `DEMO_SESSION_ID` and rerun setup first:
 
