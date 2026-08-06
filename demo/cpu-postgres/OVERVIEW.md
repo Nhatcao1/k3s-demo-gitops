@@ -4,15 +4,19 @@
 flowchart LR
     A[CSV: salary + KPI mỗi dòng] --> B[Initialize]
     B --> P[(PostgreSQL)]
-    P --> C[SUM]
+    P --> C[Reference: SUM salary]
     C --> P
     P --> D[Verify SUM]
     D --> P
-    P --> E[Multiply từng salary × KPI rồi SUM]
+    P --> E[Main: nhân từng salary × KPI rồi SUM]
     E --> P
     P --> F[Verify KPI result]
     F --> P
 ```
+
+Bài toán chính là `SUM(salary[i] × KPI[i])`: nhân theo từng dòng trước, sau đó
+mới SUM. `sum_ciphertext` chỉ là kết quả tham chiếu của salary gốc và không đi
+vào phép tính chính.
 
 ## PostgreSQL schema
 
@@ -37,7 +41,7 @@ flowchart LR
 |---|---|---|
 | `schema` | `schema.sql`, DB credential | 4 bảng PostgreSQL |
 | `initialize` | CSV `salary,kpi`, scheme, wrapping key | Context, encrypted salary/KPI vectors, evaluation keys, wrapped key, expected values |
-| `sum` | Context, salary ciphertext, SUM keys | `sum_ciphertext` |
+| `sum` | Context, salary ciphertext, SUM keys | `sum_ciphertext` tham chiếu; không dùng cho phép tính KPI |
 | `verify-sum` | Context, `sum_ciphertext`, wrapped key | Decrypted SUM và error |
-| `multiply` | Context, salary/KPI ciphertexts, multiply keys, SUM keys | `kpi_result_ciphertext` chứa encrypted `SUM(salary[i] × KPI[i])` |
+| `multiply` | Context, salary/KPI ciphertexts, multiply keys, SUM keys | Nhân từng slot trước, rồi tạo `kpi_result_ciphertext = SUM(salary[i] × KPI[i])` |
 | `verify-kpi` | Context, `kpi_result_ciphertext`, wrapped key | Decrypted KPI-adjusted amount, error và trạng thái `VERIFIED` |

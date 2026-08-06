@@ -6,12 +6,13 @@ flowchart LR
     D --> P[Node3 port-forward 127.0.0.1:15432]
     P <--> E[(PostgreSQL)]
     R --> T[(he_demo_results)]
-    P --> F[SUM Job]
+    P --> F[Reference SUM salary Job]
     F --> P
     P --> VS[Trusted SUM verifier copies and decrypts sum_ciphertext]
     VS --> T
-    P --> G[Multiply salary i by KPI i then encrypted SUM]
-    G --> P
+    P --> G[Main Job multiply salary i by KPI i]
+    G --> S[Encrypted SUM of weighted rows]
+    S --> P
     P --> H[Trusted KPI verifier copies and decrypts kpi_result_ciphertext]
-    H --> I[Two decrypted values + two differences]
+    H --> I[Compare expected and decrypted weighted total]
     I --> T

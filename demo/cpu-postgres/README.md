@@ -2,6 +2,16 @@
 
 Purpose: encrypt salary and per-row KPI values, store the HE artifacts in PostgreSQL, calculate encrypted salary SUM and encrypted `SUM(salary[i] × KPI[i])`.
 
+Main calculation:
+
+```text
+weighted[i] = salary[i] × KPI[i]
+final_total = SUM(weighted[i])
+```
+
+The standalone salary SUM is only a reference/checkpoint. Its
+`sum_ciphertext` is not used to calculate `final_total`.
+
 ## 1. Pull the demo branch
 
 In an existing GitOps clone:
@@ -149,12 +159,13 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   get job -l he.demo/stage=initialize
 ```
 
-Show expected plaintext, operations, ciphertexts, context and wrapped key:
+Show the expected salary SUM, expected weighted total, ciphertexts, context and
+wrapped key:
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_sum,r.expected_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,CASE artifact_name WHEN '\''salary_ciphertext'\'' THEN '\''encrypted salary vector'\'' WHEN '\''kpi_ciphertext'\'' THEN '\''encrypted per-row KPI vector'\'' WHEN '\''wrapped_secret_key'\'' THEN '\''AES-GCM wrapped lab key; not raw key'\'' ELSE '\''HE metadata or evaluation key'\'' END AS description,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_sum AS expected_salary_sum,r.expected_kpi_amount AS expected_weighted_total FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,CASE artifact_name WHEN '\''salary_ciphertext'\'' THEN '\''encrypted salary vector'\'' WHEN '\''kpi_ciphertext'\'' THEN '\''encrypted per-row KPI vector'\'' WHEN '\''wrapped_secret_key'\'' THEN '\''AES-GCM wrapped lab key; not raw key'\'' ELSE '\''HE metadata or evaluation key'\'' END AS description,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
 `expected_sum` and `expected_kpi_amount = SUM(salary[i] × KPI[i])` are demo-only
@@ -164,7 +175,10 @@ arithmetic.
 `he_demo_results` contains one row per session with separate SUM and KPI
 expected/decrypted/error columns.
 
-## 6. Calculate encrypted SUM
+## 6. Reference only: calculate the raw encrypted salary SUM
+
+This checkpoint verifies `SUM(salary[i])`. It does not multiply KPI values and
+its output is not an input to the main calculation in step 7.
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -210,7 +224,17 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_sum,r.decrypted_sum,(r.decrypted_sum-r.expected_sum) AS sum_difference,r.sum_absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT artifact_name,CASE artifact_name WHEN '\''sum_ciphertext'\'' THEN '\''encrypted SUM; copied only by trusted verify-sum Job'\'' ELSE '\''supporting HE artifact'\'' END AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''sum_ciphertext'\'' ORDER BY session_id;"'
 ```
 
-## 7. Multiply encrypted salary by per-row encrypted KPI, then SUM
+## 7. Main calculation: multiply each encrypted row, then SUM
+
+Inside this Job, HE operations run in this order:
+
+```text
+weighted_ciphertext = salary_ciphertext × kpi_ciphertext
+kpi_result_ciphertext = SUM(weighted_ciphertext)
+```
+
+The Job reads `salary_ciphertext` and `kpi_ciphertext`; it does not read
+`sum_ciphertext` from step 6.
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -233,10 +257,10 @@ until the trusted KPI verifier decrypts it:
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_kpi_amount,r.decrypted_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,artifact_name,'\''encrypted SUM of salary[i] multiplied by KPI[i]'\'' AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''kpi_result_ciphertext'\'' ORDER BY session_id;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_kpi_amount AS expected_weighted_total,r.decrypted_kpi_amount AS decrypted_weighted_total FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,artifact_name,'\''encrypted SUM of salary[i] × KPI[i]'\'' AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''kpi_result_ciphertext'\'' ORDER BY session_id;"'
 ```
 
-## 8. Decrypt and verify the KPI result
+## 8. Decrypt and compare the final weighted total
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -253,12 +277,13 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   get job -l he.demo/stage=verify-kpi
 ```
 
-Calculate both signed differences in PostgreSQL:
+Compare `SUM(salary[i] × KPI[i])` calculated by Python with the decrypted HE
+result:
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,r.expected_sum,r.decrypted_sum,(r.decrypted_sum-r.expected_sum) AS sum_difference,r.expected_kpi_amount,r.decrypted_kpi_amount,(r.decrypted_kpi_amount-r.expected_kpi_amount) AS kpi_difference FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome,completed_at FROM he_demo_operations ORDER BY operation_id;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,r.expected_kpi_amount AS expected_weighted_total,r.decrypted_kpi_amount AS decrypted_weighted_total,(r.decrypted_kpi_amount-r.expected_kpi_amount) AS signed_difference,r.kpi_absolute_error AS absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome,completed_at FROM he_demo_operations ORDER BY operation_id;"'
 ```
 
 BGV should have zero error when the configured plaintext modulus is large enough; CKKS has a small approximation error.
