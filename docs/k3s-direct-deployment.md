@@ -91,6 +91,48 @@ kubectl -n he-dev run he-capabilities-check \
   --command -- curl -fsS http://he-evaluator:8080/v1/capabilities
 ```
 
+## Direct SUM calls without benchmark code
+
+These commands send `[12, 7, 8, 9]` directly to each deployed service. Both
+services encrypt the values inside their own runtime, perform the SUM on
+ciphertext, decrypt once, and return a result close to `36`.
+
+### CPU OpenFHE-Python
+
+Keep this running in terminal 1:
+
+```sh
+kubectl -n datalake-he port-forward service/he-evaluator 18080:8080
+```
+
+Call the CPU service from terminal 2:
+
+```sh
+curl -fsS -X POST http://127.0.0.1:18080/v1/demo/sum \
+  -H 'Content-Type: application/json' \
+  -d '{"values":[12,7,8,9]}' | python3 -m json.tool
+```
+
+### GPU FIDESlib
+
+Stop the CPU port-forward with `Ctrl-C`, then keep this running in terminal 1:
+
+```sh
+kubectl -n datalake-he port-forward service/he-evaluator-gpu 18081:8080
+```
+
+Call the GPU service from terminal 2:
+
+```sh
+curl -fsS -X POST http://127.0.0.1:18081/v1/demo/sum \
+  -H 'Content-Type: application/json' \
+  -d '{"values":[12,7,8,9]}' | python3 -m json.tool
+```
+
+The CPU path calls OpenFHE `EvalSum`; the GPU path starts the native
+`he-gpu-demo` executable, which calls FIDESlib `AccumulateSum`. These are
+trusted functional checks, not the final secretless ciphertext API.
+
 ## 5. Optional external access through K3s Traefik
 
 Create an Ingress only when the API must be reached outside the cluster:
