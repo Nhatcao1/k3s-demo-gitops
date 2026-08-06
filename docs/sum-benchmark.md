@@ -47,6 +47,28 @@ process adapter. FIDESlib is a C++ library and is linked into `he-gpu-demo`;
 all GPU encryption, SUM evaluation, encrypted chunk combining, and final
 decryption happen in that native executable.
 
+The plaintext JSON is only the common benchmark input. CPU and GPU both
+encrypt those values before calling their HE SUM operation; neither uses a
+plaintext SUM as its reported HE result.
+
+The result separates two useful comparisons:
+
+```text
+compute_seconds
+  Pandas: normal plaintext sum
+  CPU/GPU: encrypted SUM + encrypted partial-sum combination
+
+end_to_end_seconds
+  Pandas: plaintext sum
+  CPU/GPU: JSON transfer + context/key generation + encryption
+           + encrypted computation + decryption
+```
+
+The detailed JSON also records context/key generation, encryption, encrypted
+SUM, encrypted combination, decryption, native total, and HTTP round-trip
+times separately. This benchmark measures HE performance, not the final
+privacy boundary; the later secretless API must accept ciphertext instead.
+
 ## Build, pull, and deploy
 
 Push `k3s-demo-app` `main`. GitLab builds `cpu-latest`; start the manual

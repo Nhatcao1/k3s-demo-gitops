@@ -84,6 +84,20 @@ def median_timing(responses: list[dict[str, Any]], name: str) -> float:
     return statistics.median(values) if values else float("nan")
 
 
+def median_he_compute(responses: list[dict[str, Any]]) -> float:
+    """Return encrypted SUM plus encrypted partial-sum combination time."""
+    values = []
+    for response in responses:
+        timings = response.get("timings")
+        if not isinstance(timings, dict):
+            continue
+        values.append(
+            float(timings.get("sum_seconds", 0.0))
+            + float(timings.get("combine_seconds", 0.0))
+        )
+    return statistics.median(values) if values else float("nan")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cpu-url", default="http://127.0.0.1:18080/v1/demo/sum")
@@ -182,6 +196,7 @@ def main() -> None:
             )
             passed = passed and backend_passed
             median_roundtrip = statistics.median(roundtrips)
+            compute_seconds = median_he_compute(responses)
             row: dict[str, Any] = {
                 "backend": backend,
                 "value_count": size,
@@ -190,6 +205,8 @@ def main() -> None:
                 "abs_error": absolute,
                 "rel_error": relative,
                 "accuracy_passed": backend_passed,
+                "compute_seconds": compute_seconds,
+                "compute_values_per_second": size / compute_seconds,
                 "end_to_end_seconds": median_roundtrip,
                 "values_per_second": size / median_roundtrip,
             }
@@ -209,6 +226,8 @@ def main() -> None:
                 "abs_error": absolute,
                 "rel_error": relative,
                 "accuracy_passed": True,
+                "compute_seconds": pandas_median,
+                "compute_values_per_second": size / pandas_median,
                 "end_to_end_seconds": pandas_median,
                 "values_per_second": size / pandas_median,
                 **{name: float("nan") for name in TIMING_FIELDS},
@@ -225,6 +244,8 @@ def main() -> None:
         "abs_error",
         "rel_error",
         "accuracy_passed",
+        "compute_seconds",
+        "compute_values_per_second",
         "end_to_end_seconds",
         "values_per_second",
         *TIMING_FIELDS,
@@ -236,13 +257,14 @@ def main() -> None:
     details_path = args.output_dir / "details.json"
     details_path.write_text(json.dumps(details, indent=2) + "\n", encoding="utf-8")
 
-    print("\nbackend values       seconds    abs_error   pass")
+    print("\nbackend values   compute_s end_to_end_s    abs_error   pass")
     for row in sorted(
         summaries, key=lambda item: (item["value_count"], item["backend"])
     ):
         print(
             f"{row['backend']:<7} {row['value_count']:>7} "
-            f"{row['end_to_end_seconds']:>11.4f} {row['abs_error']:>12.6g} "
+            f"{row['compute_seconds']:>11.4f} "
+            f"{row['end_to_end_seconds']:>12.4f} {row['abs_error']:>12.6g} "
             f"{str(row['accuracy_passed']):>6}"
         )
     print(f"\nSummary: {summary_path}")
