@@ -5,6 +5,10 @@ metadata:
   namespace: ${HE_NAMESPACE}
 spec:
   replicas: 1
+  # The target node has one allocatable GPU. A rolling update would keep the
+  # old Pod on that GPU while the replacement waits forever for the same GPU.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: ${HE_GPU_DEPLOYMENT}

@@ -174,6 +174,11 @@ artifact compatibility failure.
 `k8s/gpu-evaluator.yaml` requests one `nvidia.com/gpu`. It cannot become Ready
 unless K3s advertises that resource and the configured GPU image exists.
 
+The GPU Deployment uses the `Recreate` strategy because the selected node has
+one allocatable GPU. During an update Kubernetes stops the old Pod first, then
+starts the new Pod with `gpu-latest`; a normal rolling update would leave the
+replacement Pending while the old Pod continued holding the only GPU.
+
 The work-server scheduling rules are written directly in
 `k8s/gpu-evaluator.yaml`:
 
