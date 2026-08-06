@@ -143,13 +143,30 @@ All paths below use the same `he-evaluator-gpu` Deployment and Service:
 | `GET /readyz` | GPU runtime and native workers are ready |
 | `GET /v1/capabilities` | Runtime backend and supported operations |
 | `POST /v1/evaluate` | Main ciphertext API: `add`, `subtract`, `multiply`, `square`, `sum`, `mean` |
-| `POST /v1/demo/evaluate` | Small plaintext demo: `add`, `subtract`, `multiply`, `sum` only |
+| `POST /v1/demo/evaluate` | Small plaintext demo; currently GPU `add`, `subtract`, `multiply`, `sum` |
 | `POST /v1/demo/sum` | Large plaintext-input SUM benchmark helper |
 
 `square` and `mean` are newly exposed through the main encrypted-artifact
-endpoint. They are intentionally not added to `/v1/demo/evaluate`. A trusted
-client creates and serializes the CKKS artifacts, calls the service, and keeps
-the secret key outside the evaluator Pod.
+endpoint but are not yet present in `/v1/demo/evaluate`. This is the immediate
+demo backlog, not an intentional long-term difference. From now on every new
+main operation must add the same demo operation so it can be checked quickly
+after deployment and reused by the benchmark driver.
+
+The demo route accepts plaintext and performs key generation, encryption, HE
+evaluation, and decryption inside its native backend. It proves that the image,
+GPU runtime, and HE operation work. It does not prove the secretless boundary.
+A trusted client creates and serializes CKKS artifacts for `/v1/evaluate` and
+keeps the secret key outside the evaluator Pod.
+
+The required development sequence for each new function is:
+
+```text
+backend operation
+  -> /v1/evaluate ciphertext contract
+  -> /v1/demo/evaluate quick diagnostic
+  -> direct curl/client correctness check
+  -> benchmark case and saved timing result
+```
 
 `square` request shape:
 

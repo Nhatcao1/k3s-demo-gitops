@@ -6,14 +6,42 @@ Build a small function-as-a-service layer for homomorphic encryption (HE).
 An application chooses a normal function such as `add` or `sum`; it should not
 need to manage OpenFHE calls, CUDA code, rescaling, or evaluation keys itself.
 
-We are developing one function at a time. The current functions are:
+We are developing one function at a time. The main ciphertext API currently
+contains:
 
 ```text
-add -> subtract -> multiply -> sum
+add -> subtract -> multiply -> square -> sum -> mean
 ```
 
-Later candidates are `square`, `mean`, and `variance`. They should not be
-added until the current functions are correct and benchmarked.
+`square` and `mean` are not considered fully delivered yet because their
+matching quick-demo paths are still missing. The next candidates, after the
+six current functions are tested and benchmarked, are `weighted_sum`,
+`variance`, and `covariance`.
+
+## Function delivery rule
+
+From now on, a requested function is complete only when the same operation is
+available through all of these layers:
+
+1. CPU OpenFHE and GPU FIDESlib backend code, when the library supports it.
+2. Main ciphertext endpoint `POST /v1/evaluate`.
+3. Plaintext-input diagnostic endpoint `POST /v1/demo/evaluate` using real HE
+   internally: create keys, encrypt, evaluate, decrypt, and return the checked
+   value.
+4. A tiny direct curl/client check suitable for deployment troubleshooting.
+5. A benchmark case that records correctness and timing against the plaintext
+   Python/Pandas baseline.
+
+Do not advertise a function as finished merely because it appears in
+`/v1/capabilities` for the main API. The demo is required for fast K3s and GPU
+verification; the ciphertext API remains required for the real trust boundary.
+
+Current demo gap:
+
+| Backend | Main `/v1/evaluate` | Demo coverage now | Required next work |
+| --- | --- | --- | --- |
+| CPU | six functions | `/v1/demo/sum`: `sum` | add one demo path for all six functions |
+| GPU | six functions | `/v1/demo/evaluate`: `add`, `subtract`, `multiply`, `sum` | add `square` and `mean` |
 
 ## Security and service boundary
 
@@ -29,15 +57,17 @@ send context + required eval keys + ciphertexts  --------->
 decrypt and verify result
 ```
 
-The evaluator must never receive plaintext or the secret key. The benchmark
-client is trusted because it owns encryption, decryption, and correctness
-checking.
+The main `/v1/evaluate` evaluator must never receive plaintext or the secret
+key. The benchmark client is trusted because it owns encryption, decryption,
+and correctness checking. The `/v1/demo/*` endpoints deliberately accept
+plaintext for diagnostics and must never be described as the production
+security boundary.
 
 The API is currently a low-level encrypted evaluator API:
 
 ```text
 POST /v1/evaluate
-operation = add | subtract | multiply | sum
+operation = add | subtract | multiply | square | sum | mean
 ```
 
 The longer-term API should hide HE parameters behind a reviewable plan. It
@@ -59,7 +89,7 @@ High-level GPU file flow:
 
 ```mermaid
 flowchart LR
-    HE["gpu/worker/src/fides_backend.cpp<br/>add, subtract, multiply, sum"]
+    HE["gpu/worker/src/fides_backend.cpp<br/>six main HE operations"]
     WORKER["gpu/worker/src/main.cpp<br/>connects API to FIDESlib backend"]
     API["gpu/api/app.py<br/>exposes /v1/evaluate"]
     IMAGE["gpu/Dockerfile<br/>packages API + worker + FIDESlib"]
@@ -130,13 +160,27 @@ Argo CD is intentionally paused while this service and benchmark contract is
 stabilized. Benchmark result files stay outside Git through
 `benchmark_runs/`.
 
-## Gate before developing more functions
+## Development roadmap
 
-Before adding another HE function:
+1. Close the demo gap: expose `square` and `mean` in the GPU native demo and
+   expose the same six-operation demo contract on CPU.
+2. Add one small direct test command that runs the selected operation against
+   an already deployed Service; deployment must remain a separate command.
+3. Benchmark `sum` first at 50k, 100k, 500k, and 1m, then extend the same
+   driver to the other five functions. Run 10m only after smaller sizes pass.
+4. Verify the real `/v1/evaluate` ciphertext path independently; a passing
+   plaintext demo does not prove the secretless serialization path.
+5. Add `weighted_sum`, then `variance` and `covariance`, one vertical slice at
+   a time under the function delivery rule above.
+6. Tune depth, modulus chain, rescale, relinearization, rotations, threading,
+   and GPU batch sizes only after correctness and comparable timing exist.
 
-1. CPU add, subtract, multiply, and sum return correct decrypted results.
+Before starting the next HE function:
+
+1. The current function returns the correct decrypted result on CPU and GPU.
 2. The 50k test passes first, followed by the larger sizes.
-3. No evaluator request or log contains plaintext or a secret key.
+3. No main `/v1/evaluate` request or log contains plaintext or a secret key;
+   demo requests are clearly labelled as trusted plaintext diagnostics.
 4. Timings and accuracy are saved in a reviewable JSON result.
 5. The fully encrypted cross-chunk SUM behavior is either implemented or its
    client-side final aggregation remains clearly labelled.
