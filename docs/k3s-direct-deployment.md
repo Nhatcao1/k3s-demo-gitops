@@ -45,8 +45,8 @@ kubeconfig CA; this setting does not affect Docker image pulls or GitLab SSH.
 
 ## 2. Create the namespace
 
-The deployment helper creates `he-dev` when it does not already exist. The
-Docker Hub repository is public, so this direct path needs no registry secret:
+The deployment helper creates the configured namespace when it does not
+already exist:
 
 ```sh
 kubectl get namespace he-dev >/dev/null 2>&1 || kubectl create namespace he-dev
@@ -76,20 +76,6 @@ http://he-evaluator:8080
 ```
 
 They do not use Pod IPs and do not require `kubectl port-forward`.
-
-Verify from inside the cluster:
-
-```sh
-kubectl -n he-dev run he-api-check \
-  --rm -i --restart=Never \
-  --image=curlimages/curl:8.15.0 \
-  --command -- curl -fsS http://he-evaluator:8080/healthz
-
-kubectl -n he-dev run he-capabilities-check \
-  --rm -i --restart=Never \
-  --image=curlimages/curl:8.15.0 \
-  --command -- curl -fsS http://he-evaluator:8080/v1/capabilities
-```
 
 ## Direct SUM calls without benchmark code
 
