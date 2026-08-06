@@ -51,6 +51,13 @@ Pin PostgreSQL and every demo Job to that node in `demo.env`:
 DEMO_NODE_NAME=node3
 ```
 
+HE Jobs use this node-local PostgreSQL forward from `demo.env`:
+
+```text
+DEMO_POSTGRES_FORWARD_HOST=127.0.0.1
+DEMO_POSTGRES_FORWARD_PORT=15432
+```
+
 Use CKKS in `demo.env`:
 
 ```text
@@ -96,7 +103,25 @@ vi salaries.csv
 
 The commands below use namespace `he-dev`; change it in `demo.env`, rerun setup, and replace `he-dev` below if needed. The insecure TLS flag is shown for a lab K3s certificate issue.
 
-## 4. Create context, keys and encrypted inputs
+## 4. Start the PostgreSQL port-forward
+
+Run this on `node3` and keep the terminal open for all HE Jobs:
+
+```sh
+kubectl -n he-dev --insecure-skip-tls-verify=true \
+  port-forward --address 127.0.0.1 \
+  statefulset/cpu-postgres-demo 15432:5432
+```
+
+Expected:
+
+```text
+Forwarding from 127.0.0.1:15432 -> 5432
+```
+
+The HE Jobs use the `node3` host network and connect to this forward at `127.0.0.1:15432`.
+
+## 5. Create context, keys and encrypted inputs
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -122,7 +147,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 `he_demo_results` contains one expected/decrypted comparison row per session.
 
-## 5. Calculate encrypted SUM
+## 6. Calculate encrypted SUM
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -144,7 +169,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-## 6. Multiply encrypted SUM by encrypted KPI
+## 7. Multiply encrypted SUM by encrypted KPI
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -166,7 +191,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-## 7. Decrypt and verify
+## 8. Decrypt and verify
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -190,7 +215,7 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 BGV should have zero error when the configured plaintext modulus is large enough; CKKS has a small approximation error.
 
-## 8. Keys and status
+## 9. Keys and status
 
 ```sh
 ./scripts/status.sh
@@ -210,7 +235,7 @@ Lab only: unwrap and print the raw secret key:
 ./scripts/show-secret-key.sh
 ```
 
-## 9. Cleanup
+## 10. Cleanup
 
 Delete demo Jobs before starting a new session; change `DEMO_SESSION_ID` and rerun setup first:
 

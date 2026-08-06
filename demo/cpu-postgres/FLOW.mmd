@@ -3,12 +3,13 @@ flowchart LR
     A --> R[Python calculates expected amount]
     B --> C[Create context and keys]
     C --> D[Encrypt salaries and KPI]
-    D --> E[(PostgreSQL)]
+    D --> P[Node3 port-forward 127.0.0.1:15432]
+    P <--> E[(PostgreSQL)]
     R --> T[(he_demo_results)]
-    E --> F[SUM Job]
-    F --> E
-    E --> G[Multiply Job]
-    G --> E
-    E --> H[Verify Job uses secret key]
+    P --> F[SUM Job]
+    F --> P
+    P --> G[Multiply Job]
+    G --> P
+    P --> H[Verify Job uses secret key]
     H --> I[Decrypted amount + error]
     I --> T

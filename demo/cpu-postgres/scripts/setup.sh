@@ -78,8 +78,8 @@ kube -n "$DEMO_NAMESPACE" create configmap cpu-postgres-demo-config \
   --from-literal=DEMO_TOLERANCE="$DEMO_TOLERANCE" \
   --from-literal=DEMO_BGV_PLAINTEXT_MODULUS="$DEMO_BGV_PLAINTEXT_MODULUS" \
   --from-literal=DEMO_SALARIES_CSV=/input/salaries.csv \
-  --from-literal=PGHOST=cpu-postgres-demo \
-  --from-literal=PGPORT=5432 \
+  --from-literal=PGHOST="$DEMO_POSTGRES_FORWARD_HOST" \
+  --from-literal=PGPORT="$DEMO_POSTGRES_FORWARD_PORT" \
   --dry-run=client -o yaml | kube apply -f - >/dev/null
 
 kube apply -f "$rendered_dir/schema-configmap.yaml"

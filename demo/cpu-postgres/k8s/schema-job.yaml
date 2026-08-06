@@ -40,6 +40,11 @@ spec:
                 name: cpu-postgres-demo-config
             - secretRef:
                 name: cpu-postgres-demo-db
+          env:
+            - name: PGHOST
+              value: cpu-postgres-demo
+            - name: PGPORT
+              value: "5432"
           resources:
             requests:
               cpu: 25m
