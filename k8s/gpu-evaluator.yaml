@@ -9,6 +9,7 @@ spec:
   # old Pod on that GPU while the replacement waits forever for the same GPU.
   strategy:
     type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app: ${HE_GPU_DEPLOYMENT}
