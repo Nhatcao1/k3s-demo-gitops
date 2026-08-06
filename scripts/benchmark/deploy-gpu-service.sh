@@ -20,15 +20,11 @@ case "$image_tag" in
 esac
 
 namespace=$HE_NAMESPACE
-if [ "$#" -eq 1 ]; then
-  image="$HE_IMAGE_REPOSITORY:$image_tag"
-else
-  image=$HE_GPU_IMAGE
-fi
 deployment=$HE_GPU_DEPLOYMENT
 service=$HE_GPU_SERVICE
 template="$repo_dir/k8s/gpu-evaluator.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
+resolver="$repo_dir/scripts/resolve-dockerhub-image.py"
 rendered_yaml=$(mktemp)
 trap 'rm -f "$rendered_yaml"' EXIT HUP INT TERM
 
@@ -36,6 +32,12 @@ command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render $template." >&2
   exit 1
 }
+
+# Resolve the public Docker Hub tag before applying it. This avoids stale tag
+# results from a corporate registry mirror while keeping gpu-latest as the only
+# user-facing CI tag.
+image=$(python3 "$resolver" "$HE_IMAGE_REPOSITORY" "$image_tag")
+echo "Resolved $HE_IMAGE_REPOSITORY:$image_tag to $image"
 
 HE_GPU_IMAGE=$image
 export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT

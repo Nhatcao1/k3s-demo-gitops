@@ -182,6 +182,9 @@ replacement Pending while the old Pod continued holding the only GPU.
 For deterministic lab refreshes, `deploy-gpu-service.sh` also deletes the old
 GPU Deployment and waits for its Pod to disappear before applying the tracked
 template. The ClusterIP Service is preserved and selects the newly created Pod.
+Before rendering, it resolves Docker Hub's `gpu-latest` tag to its current
+immutable digest. This prevents the work server's registry mirror from serving
+an older cached digest for the moving tag.
 
 The work-server scheduling rules are written directly in
 `k8s/gpu-evaluator.yaml`:
