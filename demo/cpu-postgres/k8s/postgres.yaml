@@ -34,6 +34,8 @@ spec:
         app.kubernetes.io/name: cpu-postgres-demo-db
         app.kubernetes.io/part-of: cpu-postgres-demo
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: ${DEMO_NODE_NAME}
       automountServiceAccountToken: false
       containers:
         - name: postgres

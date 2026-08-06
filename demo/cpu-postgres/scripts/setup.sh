@@ -27,7 +27,8 @@ test -f "$csv_file" || {
   exit 1
 }
 
-export DEMO_NAMESPACE DEMO_HE_IMAGE DEMO_POSTGRES_IMAGE DEMO_POSTGRES_STORAGE
+export DEMO_NAMESPACE DEMO_NODE_NAME DEMO_HE_IMAGE DEMO_POSTGRES_IMAGE
+export DEMO_POSTGRES_STORAGE
 renderer=$repo_dir/scripts/render-he-yaml.py
 rendered_dir=$demo_dir/rendered
 mkdir -p "$rendered_dir"

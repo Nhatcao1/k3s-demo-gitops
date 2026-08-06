@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/part-of: cpu-postgres-demo
         he.demo/stage: initialize
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: ${DEMO_NODE_NAME}
       restartPolicy: Never
       automountServiceAccountToken: false
       containers:

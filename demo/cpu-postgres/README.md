@@ -39,6 +39,18 @@ Edit namespace, scheme, session, images, salary range and TLS in this file:
 vi demo.env
 ```
 
+Find the node name for InternalIP `100.106.33.74`:
+
+```sh
+kubectl get nodes -o wide
+```
+
+Pin PostgreSQL and every demo Job to that node in `demo.env`:
+
+```text
+DEMO_NODE_NAME=node2
+```
+
 Use CKKS in `demo.env`:
 
 ```text
