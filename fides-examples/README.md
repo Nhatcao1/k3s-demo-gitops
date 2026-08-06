@@ -4,10 +4,10 @@ This folder runs selected upstream FIDESlib C++ examples directly as
 Kubernetes Jobs. It bypasses the HTTP API, Python client, and benchmark code,
 so it is the shortest check of FIDESlib, CUDA, and the NVIDIA T4.
 
-All examples use the recognizable Docker tag:
+The GPU service and native examples use the same `main` Docker tag:
 
 ```text
-docker.io/dockerboi99/he_k8s:gpu-t4-examples
+docker.io/dockerboi99/he_k8s:gpu-latest
 ```
 
 ## What is included
