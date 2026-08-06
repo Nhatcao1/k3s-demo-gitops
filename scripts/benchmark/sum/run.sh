@@ -16,7 +16,7 @@ command -v gzip >/dev/null 2>&1 || {
 }
 
 namespace=$HE_NAMESPACE
-client_image=${SUM_BENCH_IMAGE:-$HE_BENCH_CLIENT_IMAGE}
+client_image_override=${SUM_BENCH_IMAGE:-}
 job_timeout=${BENCH_JOB_TIMEOUT_SECONDS:-43200}
 run_id=${RUN_ID:-"$(date -u +%Y%m%d%H%M%S)"}
 job_name="he-sum-benchmark-$run_id"
@@ -39,7 +39,6 @@ gzip -c "$script_dir/compare_sum.py" > "$cpu_archive"
 gzip -c "$script_dir/generate_data.py" > "$generator_archive"
 
 echo "Benchmark namespace: $namespace"
-echo "Benchmark client image: $client_image"
 he_kubectl -n "$namespace" get "deployment/$HE_CPU_DEPLOYMENT" >/dev/null
 he_kubectl -n "$namespace" get "deployment/$HE_GPU_DEPLOYMENT" >/dev/null
 he_kubectl -n "$namespace" get "service/$HE_CPU_SERVICE" >/dev/null
@@ -48,6 +47,25 @@ he_kubectl -n "$namespace" rollout status \
   "deployment/$HE_CPU_DEPLOYMENT" --timeout=2m
 he_kubectl -n "$namespace" rollout status \
   "deployment/$HE_GPU_DEPLOYMENT" --timeout=2m
+
+if [ -n "$client_image_override" ]; then
+  client_image=$client_image_override
+else
+  client_image=$(he_kubectl -n "$namespace" get \
+    "deployment/$HE_CPU_DEPLOYMENT" \
+    -o jsonpath='{.spec.template.spec.containers[0].image}')
+fi
+case "$client_image" in
+  ""|*[[:space:]]*)
+    echo "Could not determine one valid CPU benchmark client image." >&2
+    exit 1
+    ;;
+  *:latest|*:cpu-latest)
+    echo "WARNING: benchmark client uses moving tag $client_image" >&2
+    echo "Deploy cpu-<commit-sha> to avoid stale registry-mirror cache." >&2
+    ;;
+esac
+echo "Benchmark client image: $client_image"
 
 he_kubectl -n "$namespace" create configmap he-sum-benchmark-code \
   --from-file=compare_sum.py.gz="$cpu_archive" \

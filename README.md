@@ -40,20 +40,26 @@ then adds `--insecure-skip-tls-verify=true` consistently.
 
 ## Build first
 
-Push `k3s-demo-app` and wait for GitLab to publish:
+Push `k3s-demo-app` and wait for GitLab to publish immutable commit tags plus
+the convenience aliases:
 
 ```text
+docker.io/dockerboi99/he_k8s:cpu-<short-commit-sha>
+docker.io/dockerboi99/he_k8s:gpu-<short-commit-sha>
 docker.io/dockerboi99/he_k8s:cpu-latest
 docker.io/dockerboi99/he_k8s:gpu-latest
 ```
+
+Use the commit tags for a cached work-server mirror. Do not use `latest` for a
+repeatable deployment.
 
 ## Direct K3s deployment
 
 Deploy the successful public Docker Hub images:
 
 ```sh
-./scripts/benchmark/deploy-cpu-service.sh
-./scripts/benchmark/deploy-gpu-service.sh
+./scripts/benchmark/deploy-cpu-service.sh cpu-<cpu-build-short-sha>
+./scripts/benchmark/deploy-gpu-service.sh gpu-<gpu-build-short-sha>
 ```
 
 Each backend Deployment exposes one ClusterIP Service for `add`, `subtract`,

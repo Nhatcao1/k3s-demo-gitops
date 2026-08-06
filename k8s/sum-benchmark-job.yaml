@@ -33,6 +33,17 @@ spec:
               import subprocess
               import sys
 
+              try:
+                  import numpy  # noqa: F401
+                  import pandas  # noqa: F401
+              except ModuleNotFoundError as error:
+                  print(
+                      "Benchmark client image is missing Pandas/NumPy: "
+                      + os.environ["SUM_BENCH_CLIENT_IMAGE"],
+                      file=sys.stderr,
+                  )
+                  raise error
+
               for name in ("compare_sum.py", "generate_data.py"):
                   source = Path("/benchmark") / f"{name}.gz"
                   target = Path("/tmp") / name
@@ -57,6 +68,8 @@ spec:
               ]
               raise SystemExit(subprocess.run(command, check=False).returncode)
           env:
+            - name: SUM_BENCH_CLIENT_IMAGE
+              value: ${SUM_BENCH_CLIENT_IMAGE}
             - name: SUM_BENCH_CPU_URL
               value: ${SUM_BENCH_CPU_URL}
             - name: SUM_BENCH_GPU_URL

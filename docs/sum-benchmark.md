@@ -71,15 +71,16 @@ privacy boundary; the later secretless API must accept ciphertext instead.
 
 ## Build, pull, and deploy
 
-Push `k3s-demo-app` `main`. GitLab builds `cpu-latest`; start the manual
-`build-fides-evaluator-gpu` job to build `gpu-latest`. Then on the K3s server:
+Push `k3s-demo-app` `main`. GitLab publishes both moving aliases and immutable
+commit tags such as `cpu-a1b2c3d4` and `gpu-a1b2c3d4`. Start the manual GPU job,
+mirror the two commit tags, then deploy those tags on the K3s server:
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
 git pull origin main
 
-HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh cpu-<cpu-build-short-sha>
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh gpu-<gpu-build-short-sha>
 ```
 
 The deploy scripts use `HE_CPU_IMAGE` and `HE_GPU_IMAGE` directly from
@@ -91,16 +92,17 @@ The deploy scripts use `HE_CPU_IMAGE` and `HE_GPU_IMAGE` directly from
 : "${HE_GPU_IMAGE_TAG:=gpu-latest}"
 ```
 
-You can also set `HE_CPU_IMAGE` or `HE_GPU_IMAGE` to a full immutable digest in
-that file when the mirror caches a moving tag.
+Do not deploy `cpu-latest` or `gpu-latest` through a caching mirror. A unique
+commit tag is fetched once and cannot silently resolve to the previous build.
+A full immutable digest is also valid when the mirror provides it.
 
 ## Benchmark client dependency
 
 No server-side virtual environment or OpenFHE installation is required.
-`run.sh` creates a Kubernetes Job using `HE_BENCH_CLIENT_IMAGE`, which defaults
-to the deployed CPU image. That image contains Pandas and NumPy for the
-plaintext baseline. Pull the CPU image built from the latest `k3s-demo-app`
-`main` before running this benchmark.
+`run.sh` reads the image reference directly from the running CPU Deployment and
+uses it for the Kubernetes benchmark Job. That makes the evaluator and
+benchmark client use the same immutable image containing Pandas and NumPy.
+`SUM_BENCH_IMAGE` remains an explicit emergency override only.
 
 ## First 50k run
 

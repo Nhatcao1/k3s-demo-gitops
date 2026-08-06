@@ -57,12 +57,14 @@ kubectl get namespace he-dev >/dev/null 2>&1 || kubectl create namespace he-dev
 The short repeatable command is:
 
 ```sh
-./scripts/benchmark/deploy-cpu-service.sh
+./scripts/benchmark/deploy-cpu-service.sh cpu-<cpu-build-short-sha>
 ```
 
 It renders `k8s/cpu-evaluator.yaml` using `config/he-lab.env`, applies the
-Deployment and Service, and restarts the Deployment so a moving `cpu-latest`
-tag is pulled again.
+Deployment and Service, and deploys the immutable CI tag. Use
+`gpu-<gpu-build-short-sha>` with `deploy-gpu-service.sh`. CPU and GPU build jobs
+may come from different commits. Avoid moving `latest` tags on a registry
+mirror because its cache may continue returning an older digest.
 
 ## 4. Stable in-cluster Service
 
