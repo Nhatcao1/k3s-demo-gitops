@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from urllib.parse import quote
+from urllib.error import URLError
 from urllib.request import urlopen
 
 
@@ -25,8 +26,11 @@ def main() -> None:
         "https://hub.docker.com/v2/repositories/"
         f"{quote(repository, safe='/')}/tags/{quote(tag, safe='')}"
     )
-    with urlopen(url, timeout=30) as response:
-        payload = json.load(response)
+    try:
+        with urlopen(url, timeout=30) as response:
+            payload = json.load(response)
+    except (URLError, TimeoutError) as error:
+        raise SystemExit(f"Docker Hub request failed: {error}") from error
     digest = payload.get("digest")
     if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
         raise SystemExit("Docker Hub returned no valid image digest")

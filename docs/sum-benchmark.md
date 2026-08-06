@@ -21,7 +21,29 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh
 HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh
 ```
 
-Both deploy scripts resolve Docker Hub tags to immutable digests.
+Both deploy scripts try to resolve Docker Hub tags to immutable digests. On a
+restricted work server with no Docker Hub access, they warn and continue with
+the tag so the cluster's internal registry mirror can pull it.
+
+To skip the public lookup explicitly:
+
+```sh
+HE_NAMESPACE=datalake-he HE_DOCKERHUB_RESOLVE_MODE=disabled \
+  ./scripts/benchmark/deploy-cpu-service.sh
+```
+
+For guaranteed freshness on a restricted server, copy the digest from a
+networked machine or Docker Hub and provide a full immutable reference:
+
+```sh
+HE_NAMESPACE=datalake-he \
+HE_CPU_IMAGE_OVERRIDE='docker.io/dockerboi99/he_k8s@sha256:<cpu-digest>' \
+  ./scripts/benchmark/deploy-cpu-service.sh
+
+HE_NAMESPACE=datalake-he \
+HE_GPU_IMAGE_OVERRIDE='docker.io/dockerboi99/he_k8s@sha256:<gpu-digest>' \
+  ./scripts/benchmark/deploy-gpu-service.sh
+```
 
 ## Install benchmark dependencies once
 
