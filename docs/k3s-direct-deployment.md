@@ -253,10 +253,19 @@ Run the implemented benchmark Jobs with:
 ```sh
 ./scripts/benchmark/run-he-bench.sh cpu primitive 50000
 ./scripts/benchmark/run-he-bench.sh cpu sum 50000
+
+# Pandas vs CPU demo SUM vs GPU demo SUM in one in-cluster Job
+./scripts/benchmark/sum/run.sh --sizes 50000 --repetitions 1
 ```
 
-They call `http://he-evaluator:8080/v1/evaluate` from inside `he-dev`. Argo CD
-will be reintroduced only after the direct CPU deployment and benchmarks pass.
+The first two commands call `http://he-evaluator:8080/v1/evaluate` from inside
+`he-dev`. Argo CD will be reintroduced only after the direct CPU deployment and
+benchmarks pass.
+
+The combined SUM command calls the CPU and GPU `/v1/demo/sum` ClusterIP URLs
+from its benchmark Pod. It does not use `port-forward`, does not request a GPU
+for the client, and works when the Kubernetes API proxy rejects upgraded
+connections. The GPU resource remains owned only by `he-evaluator-gpu`.
 
 ## GPU deployment
 

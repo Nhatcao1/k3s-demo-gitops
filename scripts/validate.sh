@@ -21,7 +21,8 @@ for template in \
   "$repo_dir/k8s/gpu-evaluator.yaml" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" \
-  "$repo_dir/k8s/benchmark-job.yaml"; do
+  "$repo_dir/k8s/benchmark-job.yaml" \
+  "$repo_dir/k8s/sum-benchmark-job.yaml"; do
   test -f "$template"
 done
 test -f "$repo_dir/scripts/render-he-yaml.py"
@@ -44,6 +45,14 @@ export BENCH_JOB_NAME BENCH_BACKEND BENCH_WORKLOAD BENCH_CLIENT_IMAGE
 export BENCH_SERVICE_URL BENCH_VALUE_COUNT BENCH_BATCH_SIZE BENCH_REPETITIONS
 export BENCH_REQUEST_TIMEOUT_SECONDS BENCH_JOB_TIMEOUT_SECONDS
 
+SUM_BENCH_JOB_NAME=he-sum-benchmark-validation
+SUM_BENCH_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
+SUM_BENCH_CPU_URL="http://${HE_CPU_SERVICE}:${HE_SERVICE_PORT}/v1/demo/sum"
+SUM_BENCH_GPU_URL="http://${HE_GPU_SERVICE}:${HE_SERVICE_PORT}/v1/demo/sum"
+SUM_BENCH_JOB_TIMEOUT_SECONDS=43200
+export SUM_BENCH_JOB_NAME SUM_BENCH_CLIENT_IMAGE SUM_BENCH_CPU_URL
+export SUM_BENCH_GPU_URL SUM_BENCH_JOB_TIMEOUT_SECONDS
+
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/cpu-evaluator.yaml" > "$render_dir/cpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
@@ -54,13 +63,16 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" > "$render_dir/fides-serial.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/benchmark-job.yaml" > "$render_dir/benchmark.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/sum-benchmark-job.yaml" > "$render_dir/sum-benchmark.yaml"
 
 for rendered in \
   "$render_dir/cpu.yaml" \
   "$render_dir/gpu.yaml" \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
-  "$render_dir/benchmark.yaml"; do
+  "$render_dir/benchmark.yaml" \
+  "$render_dir/sum-benchmark.yaml"; do
   if grep -q '\${' "$rendered"; then
     echo "Unrendered placeholder in $rendered" >&2
     exit 1
@@ -86,6 +98,10 @@ grep -q "image: $HE_FIDES_EXAMPLES_IMAGE" "$render_dir/fides-simple.yaml"
 grep -q '/usr/local/bin/fides-serial' "$render_dir/fides-serial.yaml"
 grep -q "image: $HE_FIDES_EXAMPLES_IMAGE" "$render_dir/fides-serial.yaml"
 grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
+grep -q "name: $SUM_BENCH_JOB_NAME" "$render_dir/sum-benchmark.yaml"
+grep -q "image: $SUM_BENCH_CLIENT_IMAGE" "$render_dir/sum-benchmark.yaml"
+grep -q "value: $SUM_BENCH_CPU_URL" "$render_dir/sum-benchmark.yaml"
+grep -q "value: $SUM_BENCH_GPU_URL" "$render_dir/sum-benchmark.yaml"
 grep -q 'name: he-dev' "$render_dir/argocd.yaml"
 grep -q 'name: he-lab' "$render_dir/argocd.yaml"
 

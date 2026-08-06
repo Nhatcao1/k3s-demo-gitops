@@ -1,0 +1,89 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${SUM_BENCH_JOB_NAME}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-sum-benchmark
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: ${SUM_BENCH_JOB_TIMEOUT_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-sum-benchmark
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: benchmark-client
+          image: ${SUM_BENCH_CLIENT_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - python
+            - -c
+            - |
+              import gzip
+              import os
+              from pathlib import Path
+              import subprocess
+              import sys
+
+              for name in ("compare_sum.py", "generate_data.py"):
+                  source = Path("/benchmark") / f"{name}.gz"
+                  target = Path("/tmp") / name
+                  with gzip.open(source, "rb") as compressed:
+                      target.write_bytes(compressed.read())
+
+              arguments = Path("/benchmark/arguments.txt").read_text(
+                  encoding="utf-8"
+              ).splitlines()
+              command = [
+                  sys.executable,
+                  "/tmp/compare_sum.py",
+                  "--cpu-url",
+                  os.environ["SUM_BENCH_CPU_URL"],
+                  "--gpu-url",
+                  os.environ["SUM_BENCH_GPU_URL"],
+                  "--data",
+                  "/tmp/data/values.csv",
+                  "--output-dir",
+                  "/tmp/results",
+                  *arguments,
+              ]
+              raise SystemExit(subprocess.run(command, check=False).returncode)
+          env:
+            - name: SUM_BENCH_CPU_URL
+              value: ${SUM_BENCH_CPU_URL}
+            - name: SUM_BENCH_GPU_URL
+              value: ${SUM_BENCH_GPU_URL}
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: benchmark-code
+              mountPath: /benchmark
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: benchmark-code
+          configMap:
+            name: he-sum-benchmark-code
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 4Gi

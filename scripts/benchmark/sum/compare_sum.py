@@ -269,6 +269,13 @@ def main() -> None:
         )
     print(f"\nSummary: {summary_path}")
     print(f"Details: {details_path}")
+    print(
+        "SUM_BENCHMARK_RESULT="
+        + json.dumps(
+            {"summary": summaries, "details": details},
+            separators=(",", ":"),
+        )
+    )
     if not passed:
         raise SystemExit("CPU or GPU result exceeded the configured accuracy tolerance")
 

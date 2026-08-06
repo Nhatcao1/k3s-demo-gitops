@@ -94,18 +94,13 @@ The deploy scripts use `HE_CPU_IMAGE` and `HE_GPU_IMAGE` directly from
 You can also set `HE_CPU_IMAGE` or `HE_GPU_IMAGE` to a full immutable digest in
 that file when the mirror caches a moving tag.
 
-## Install benchmark dependencies once
+## Benchmark client dependency
 
-```sh
-python3 -m venv .venv-he-sum
-source .venv-he-sum/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install -r scripts/benchmark/sum/requirements.txt
-```
-
-This installs only Pandas and NumPy in `.venv-he-sum`, not OpenFHE.
-After installation, either keep the environment active or run `deactivate`;
-`run.sh` calls `.venv-he-sum/bin/python` directly.
+No server-side virtual environment or OpenFHE installation is required.
+`run.sh` creates a Kubernetes Job using `HE_BENCH_CLIENT_IMAGE`, which defaults
+to the deployed CPU image. That image contains Pandas and NumPy for the
+plaintext baseline. Pull the CPU image built from the latest `k3s-demo-app`
+`main` before running this benchmark.
 
 ## First 50k run
 
@@ -129,29 +124,28 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
   --timeout 3600
 ```
 
-The script does not redeploy. It opens temporary port-forwards, generates or
-reuses `data/sum-benchmark/values.csv`, calls the running services, saves the
-results, and closes the port-forwards.
-
-Do not start separate `kubectl port-forward` commands before `run.sh`. The
-script owns ports `HE_CPU_LOCAL_PORT` and `HE_GPU_LOCAL_PORT`, waits for both
-Deployments and `/readyz` endpoints, and closes both tunnels on exit. If a
-tunnel or remote Pod fails, it now prints the corresponding log immediately:
+The script does not redeploy and does not use `kubectl port-forward`. It creates
+one ordinary CPU benchmark Job inside `HE_NAMESPACE`. The Job generates its
+deterministic CSV, runs the Pandas baseline, and calls both ClusterIP Services:
 
 ```text
-benchmark_runs/sum/<UTC-time>/cpu-port-forward.log
-benchmark_runs/sum/<UTC-time>/gpu-port-forward.log
+benchmark Job (no GPU requested)
+  -> http://he-evaluator:8080/v1/demo/sum
+  -> http://he-evaluator-gpu:8080/v1/demo/sum
 ```
 
-Use different values in `config/he-lab.env` only when port 18080 or 18081 is
-already occupied.
+ClusterIP works across Pods on the same or different Kubernetes nodes. This
+avoids `error upgrading connection` on work-server API proxies that block
+`kubectl port-forward` and `kubectl exec` streaming connections.
 
 ```text
 benchmark_runs/sum/<UTC-time>/summary.csv
-benchmark_runs/sum/<UTC-time>/details.json
+benchmark_runs/sum/<UTC-time>/result.json
+benchmark_runs/sum/<UTC-time>/job.log
 ```
 
-Both `data/` and `benchmark_runs/` are ignored by Git.
+The generated input stays in the Job's temporary volume. `benchmark_runs/` is
+ignored by Git.
 
 ## Larger-value accuracy trial
 
