@@ -48,7 +48,7 @@ kubectl get nodes -o wide
 Pin PostgreSQL and every demo Job to that node in `demo.env`:
 
 ```text
-DEMO_NODE_NAME=node2
+DEMO_NODE_NAME=node3
 ```
 
 Use CKKS in `demo.env`:
