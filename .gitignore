@@ -4,6 +4,7 @@
 **/__pycache__/
 /benchmark_runs/
 /data/
+/.venv-he-sum/
 *.rendered.yaml
 *-secret.yaml
 private-key*

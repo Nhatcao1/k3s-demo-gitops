@@ -20,15 +20,11 @@ case "$image_tag" in
 esac
 
 namespace=$HE_NAMESPACE
-if [ "$#" -eq 1 ]; then
-  image="$HE_IMAGE_REPOSITORY:$image_tag"
-else
-  image=$HE_CPU_IMAGE
-fi
 deployment=$HE_CPU_DEPLOYMENT
 service=$HE_CPU_SERVICE
 template="$repo_dir/k8s/cpu-evaluator.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
+resolver="$repo_dir/scripts/resolve-dockerhub-image.py"
 rendered_yaml=$(mktemp)
 trap 'rm -f "$rendered_yaml"' EXIT HUP INT TERM
 
@@ -37,6 +33,9 @@ command -v python3 >/dev/null 2>&1 || {
   exit 1
 }
 
+image=$(python3 "$resolver" "$HE_IMAGE_REPOSITORY" "$image_tag")
+echo "Resolved $HE_IMAGE_REPOSITORY:$image_tag to $image"
+
 HE_CPU_IMAGE=$image
 export HE_NAMESPACE HE_CPU_IMAGE HE_CPU_DEPLOYMENT HE_CPU_SERVICE HE_SERVICE_PORT
 
@@ -44,9 +43,6 @@ he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create names
 
 python3 "$renderer" "$template" > "$rendered_yaml"
 he_kubectl apply -f "$rendered_yaml"
-
-# A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
-he_kubectl -n "$namespace" rollout restart "deployment/$deployment"
 
 he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=10m

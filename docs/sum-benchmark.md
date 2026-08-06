@@ -1,0 +1,81 @@
+# SUM benchmark: Pandas vs CPU OpenFHE vs GPU FIDESlib
+
+This trusted demo sends the same plaintext values to both service Pods. Each
+service creates one CKKS context/key pair, encrypts 8192-value chunks,
+homomorphically sums and combines them, then decrypts once. It is separate
+from the secretless `/v1/evaluate` API.
+
+The server needs only `k3s-demo-gitops`. OpenFHE and FIDESlib stay inside their
+separate CPU and GPU images.
+
+## Build, pull, and deploy
+
+Push `k3s-demo-app` `main`. GitLab builds `cpu-latest`; start the manual
+`build-fides-evaluator-gpu` job to build `gpu-latest`. Then on the K3s server:
+
+```sh
+cd ~/gitlab-k3s-lab/k3s-demo-gitops
+git pull origin main
+
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh
+```
+
+Both deploy scripts resolve Docker Hub tags to immutable digests.
+
+## Install benchmark dependencies once
+
+```sh
+./scripts/benchmark/sum/setup.sh
+```
+
+This installs only Pandas and NumPy in `.venv-he-sum`, not OpenFHE.
+
+## First 50k run
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
+  --sizes 50000 \
+  --min-value 0 \
+  --max-value 100 \
+  --repetitions 1
+```
+
+## Full run
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
+  --sizes 50000 100000 500000 1000000 \
+  --min-value 0 \
+  --max-value 100 \
+  --seed 42 \
+  --repetitions 3 \
+  --timeout 3600
+```
+
+The script does not redeploy. It opens temporary port-forwards, generates or
+reuses `data/sum-benchmark/values.csv`, calls the running services, saves the
+results, and closes the port-forwards.
+
+```text
+benchmark_runs/sum/<UTC-time>/summary.csv
+benchmark_runs/sum/<UTC-time>/details.json
+```
+
+Both `data/` and `benchmark_runs/` are ignored by Git.
+
+## Larger-value accuracy trial
+
+Run this only after the 0-100 test succeeds:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
+  --sizes 50000 100000 500000 1000000 \
+  --min-value 0 \
+  --max-value 1000000 \
+  --repetitions 1 \
+  --regenerate
+```
+
+This explores CKKS precision at larger totals. CKKS uses approximate real
+arithmetic, so this is not a literal integer-overflow test.

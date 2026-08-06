@@ -40,6 +40,8 @@ spec:
               value: "805306368"
             - name: HE_GPU_WORKER_TIMEOUT_SECONDS
               value: "600"
+            - name: HE_GPU_DEMO_TIMEOUT_SECONDS
+              value: "3600"
           resources:
             requests:
               cpu: "2"
