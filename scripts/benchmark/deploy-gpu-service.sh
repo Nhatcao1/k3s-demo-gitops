@@ -43,10 +43,13 @@ export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_POR
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
 python3 "$renderer" "$template" > "$rendered_yaml"
-he_kubectl apply -f "$rendered_yaml"
 
-# A moving tag needs a fresh rollout even when the rendered YAML is unchanged.
-he_kubectl -n "$namespace" rollout restart "deployment/$deployment"
+# This lab has one allocatable GPU. Remove the existing Deployment completely
+# so no old Ready Pod can keep serving and no old Pod can hold the T4 while the
+# replacement waits. The Service is preserved and reconnects to the new Pod.
+he_kubectl -n "$namespace" delete "deployment/$deployment" \
+  --ignore-not-found --wait=true
+he_kubectl apply -f "$rendered_yaml"
 
 if ! he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=15m; then

@@ -179,6 +179,10 @@ one allocatable GPU. During an update Kubernetes stops the old Pod first, then
 starts the new Pod with `gpu-latest`; a normal rolling update would leave the
 replacement Pending while the old Pod continued holding the only GPU.
 
+For deterministic lab refreshes, `deploy-gpu-service.sh` also deletes the old
+GPU Deployment and waits for its Pod to disappear before applying the tracked
+template. The ClusterIP Service is preserved and selects the newly created Pod.
+
 The work-server scheduling rules are written directly in
 `k8s/gpu-evaluator.yaml`:
 
