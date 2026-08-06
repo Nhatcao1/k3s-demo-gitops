@@ -290,9 +290,26 @@ BGV should have zero error when the configured plaintext modulus is large enough
 
 ## 9. Keys and status
 
+Every command writes a row to `he_demo_job_runs` before doing HE work. A normal
+exception is updated to `FAILED` with its error detail. If a pod is killed
+without handling the error, its last row remains `RUNNING` instead of
+disappearing.
+
 ```sh
 ./scripts/status.sh
 ```
+
+Show only failed or interrupted attempts:
+
+```sh
+kubectl -n he-dev --insecure-skip-tls-verify=true \
+  exec statefulset/cpu-postgres-demo -- sh -lc \
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT run_id,session_id,command,outcome,detail,started_at,finished_at FROM he_demo_job_runs WHERE outcome IN ('\''FAILED'\'','\''RUNNING'\'') ORDER BY run_id;"'
+```
+
+A verification mismatch still exits non-zero, but its decrypted value,
+expected value and absolute error remain in `he_demo_results`; the failure
+detail remains in `he_demo_job_runs`.
 
 Show the wrapped secret key stored in PostgreSQL:
 

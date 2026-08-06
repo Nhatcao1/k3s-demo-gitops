@@ -26,6 +26,7 @@ vào phép tính chính.
 | `he_demo_results` | Expected/decrypted/error riêng cho salary SUM và `SUM(salary[i] × KPI[i])`. |
 | `he_demo_artifacts` | Context, ciphertext, evaluation key và wrapped secret key dạng `bytea`. |
 | `he_demo_operations` | Lịch sử initialize, sum, multiply và verify. |
+| `he_demo_job_runs` | Mọi lần chạy Job: `RUNNING`, `COMPLETED` hoặc `FAILED` cùng error detail. |
 
 ## HE được exposed như thế nào
 
@@ -39,7 +40,7 @@ vào phép tính chính.
 
 | Job | Input | Output |
 |---|---|---|
-| `schema` | `schema.sql`, DB credential | 4 bảng PostgreSQL |
+| `schema` | `schema.sql`, DB credential | 5 bảng PostgreSQL |
 | `initialize` | CSV `salary,kpi`, scheme, wrapping key | Context, encrypted salary/KPI vectors, evaluation keys, wrapped key, expected values |
 | `sum` | Context, salary ciphertext, SUM keys | `sum_ciphertext` tham chiếu; không dùng cho phép tính KPI |
 | `verify-sum` | Context, `sum_ciphertext`, wrapped key | Decrypted SUM và error |

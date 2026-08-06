@@ -141,7 +141,20 @@ data:
         outcome IN ('COMPLETED', 'PASSED', 'FAILED')
       );
 
+    CREATE TABLE IF NOT EXISTS he_demo_job_runs (
+      run_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      session_id varchar(128) NOT NULL,
+      command varchar(32) NOT NULL,
+      outcome varchar(16) NOT NULL CHECK (
+        outcome IN ('RUNNING', 'COMPLETED', 'FAILED')
+      ),
+      detail text NOT NULL DEFAULT '',
+      started_at timestamptz NOT NULL DEFAULT now(),
+      finished_at timestamptz
+    );
+
     REVOKE ALL ON he_demo_artifacts FROM PUBLIC;
     REVOKE ALL ON he_demo_results FROM PUBLIC;
     REVOKE ALL ON he_demo_sessions FROM PUBLIC;
     REVOKE ALL ON he_demo_operations FROM PUBLIC;
+    REVOKE ALL ON he_demo_job_runs FROM PUBLIC;
