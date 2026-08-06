@@ -72,10 +72,17 @@ DEMO_SCHEME=bgv
 DEMO_SESSION_ID=salary-bgv-001
 ```
 
-Generate 100 salaries and KPI `0.8`:
+Generate 100 salaries and a random KPI from `0.8` through `1.2` in increments
+defined by `DEMO_KPI_SCALE`:
 
 ```sh
-./scripts/generate-salaries.sh 100 0.8
+./scripts/generate-salaries.sh 100
+```
+
+To reproduce a run with a fixed KPI, pass it explicitly:
+
+```sh
+./scripts/generate-salaries.sh 100 1.1
 ```
 
 Generated input files:
@@ -140,12 +147,15 @@ Show expected plaintext, operations, ciphertexts, context and wrapped key:
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_sum,r.expected_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,CASE artifact_name WHEN '\''salary_ciphertext'\'' THEN '\''encrypted salary vector'\'' WHEN '\''kpi_ciphertext'\'' THEN '\''encrypted repeated KPI vector'\'' WHEN '\''wrapped_secret_key'\'' THEN '\''AES-GCM wrapped lab key; not raw key'\'' ELSE '\''HE metadata or evaluation key'\'' END AS description,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
 ```
 
-`expected_amount` is a demo-only plaintext reference calculated with exact Python integer and decimal arithmetic.
+`expected_sum` and `expected_kpi_amount = expected_sum × KPI` are demo-only
+plaintext references calculated with exact Python integer and decimal
+arithmetic.
 
-`he_demo_results` contains one expected/decrypted comparison row per session.
+`he_demo_results` contains one row per session with separate SUM and KPI
+expected/decrypted/error columns.
 
 ## 6. Calculate encrypted SUM
 
@@ -161,12 +171,30 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   logs -l he.demo/stage=sum --all-containers=true --prefix=true
 ```
 
-Show the new `sum_ciphertext` and session progress:
+`sum_ciphertext` is opaque encrypted bytes. PostgreSQL cannot subtract it from
+`expected_sum`. Run the separate trusted verifier: it copies only that
+ciphertext, the context and wrapped lab key into private temporary files,
+decrypts one scalar, and writes the observed value/error back to PostgreSQL.
+The SUM evaluator above remains secretless.
+
+```sh
+kubectl -n he-dev --insecure-skip-tls-verify=true \
+  create -f rendered/verify-sum-job.yaml
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
+  wait --for=condition=complete job \
+  -l he.demo/stage=verify-sum --timeout=15m
+
+kubectl -n he-dev --insecure-skip-tls-verify=true \
+  logs -l he.demo/stage=verify-sum --all-containers=true --prefix=true
+```
+
+Calculate the signed SUM difference in PostgreSQL:
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_sum,r.decrypted_sum,(r.decrypted_sum-r.expected_sum) AS sum_difference,r.sum_absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT artifact_name,CASE artifact_name WHEN '\''sum_ciphertext'\'' THEN '\''encrypted SUM; copied only by trusted verify-sum Job'\'' ELSE '\''supporting HE artifact'\'' END AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''sum_ciphertext'\'' ORDER BY session_id;"'
 ```
 
 ## 7. Multiply encrypted SUM by encrypted KPI
@@ -183,15 +211,16 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
   logs -l he.demo/stage=multiply --all-containers=true --prefix=true
 ```
 
-Show the new `kpi_result_ciphertext` and session progress:
+Show the new `kpi_result_ciphertext`; the observed KPI amount is still NULL
+until the trusted KPI verifier decrypts it:
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.status,r.expected_kpi_amount,r.decrypted_kpi_amount FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,artifact_name,'\''encrypted SUM multiplied by encrypted KPI'\'' AS description,octet_length(payload) AS bytes FROM he_demo_artifacts WHERE artifact_name='\''kpi_result_ciphertext'\'' ORDER BY session_id;"'
 ```
 
-## 8. Decrypt and verify
+## 8. Decrypt and verify the KPI result
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
@@ -199,18 +228,18 @@ kubectl -n he-dev --insecure-skip-tls-verify=true \
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   wait --for=condition=complete job \
-  -l he.demo/stage=verify --timeout=15m
+  -l he.demo/stage=verify-kpi --timeout=15m
 
 kubectl -n he-dev --insecure-skip-tls-verify=true \
-  logs -l he.demo/stage=verify --all-containers=true --prefix=true
+  logs -l he.demo/stage=verify-kpi --all-containers=true --prefix=true
 ```
 
-Compare `expected_amount`, `decrypted_amount` and `absolute_error`:
+Calculate both signed differences in PostgreSQL:
 
 ```sh
 kubectl -n he-dev --insecure-skip-tls-verify=true \
   exec statefulset/cpu-postgres-demo -- sh -lc \
-  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,s.valid_count,r.expected_amount,r.decrypted_amount,r.absolute_error FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome,completed_at FROM he_demo_operations ORDER BY operation_id; SELECT session_id,artifact_name,octet_length(payload) AS bytes,left(encode(payload,'\''hex'\''),64) AS encrypted_preview FROM he_demo_artifacts ORDER BY session_id,artifact_name;"'
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT s.session_id,s.scheme,s.status,r.expected_sum,r.decrypted_sum,(r.decrypted_sum-r.expected_sum) AS sum_difference,r.expected_kpi_amount,r.decrypted_kpi_amount,(r.decrypted_kpi_amount-r.expected_kpi_amount) AS kpi_difference FROM he_demo_sessions AS s JOIN he_demo_results AS r USING (session_id) ORDER BY s.created_at; SELECT session_id,operation,outcome,completed_at FROM he_demo_operations ORDER BY operation_id;"'
 ```
 
 BGV should have zero error when the configured plaintext modulus is large enough; CKKS has a small approximation error.

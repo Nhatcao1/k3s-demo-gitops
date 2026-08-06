@@ -1,6 +1,6 @@
 flowchart LR
     A[CSV salaries + KPI] --> B[Initialize Job]
-    A --> R[Python calculates expected amount]
+    A --> R[Python calculates expected SUM and expected KPI amount]
     B --> C[Create context and keys]
     C --> D[Encrypt salaries and KPI]
     D --> P[Node3 port-forward 127.0.0.1:15432]
@@ -8,8 +8,10 @@ flowchart LR
     R --> T[(he_demo_results)]
     P --> F[SUM Job]
     F --> P
+    P --> VS[Trusted SUM verifier copies and decrypts sum_ciphertext]
+    VS --> T
     P --> G[Multiply Job]
     G --> P
-    P --> H[Verify Job uses secret key]
-    H --> I[Decrypted amount + error]
+    P --> H[Trusted KPI verifier copies and decrypts kpi_result_ciphertext]
+    H --> I[Two decrypted values + two differences]
     I --> T

@@ -27,14 +27,41 @@ data:
     CREATE TABLE IF NOT EXISTS he_demo_results (
       session_id varchar(128) PRIMARY KEY REFERENCES he_demo_sessions(session_id)
         ON DELETE CASCADE,
-      expected_amount numeric NOT NULL,
-      decrypted_amount numeric,
-      absolute_error numeric CHECK (absolute_error >= 0),
+      expected_sum numeric,
+      decrypted_sum numeric,
+      sum_absolute_error numeric CHECK (sum_absolute_error >= 0),
+      expected_kpi_amount numeric,
+      decrypted_kpi_amount numeric,
+      kpi_absolute_error numeric CHECK (kpi_absolute_error >= 0),
       updated_at timestamptz NOT NULL DEFAULT now()
     );
 
+    ALTER TABLE he_demo_results
+      ADD COLUMN IF NOT EXISTS expected_sum numeric,
+      ADD COLUMN IF NOT EXISTS decrypted_sum numeric,
+      ADD COLUMN IF NOT EXISTS sum_absolute_error numeric,
+      ADD COLUMN IF NOT EXISTS expected_kpi_amount numeric,
+      ADD COLUMN IF NOT EXISTS decrypted_kpi_amount numeric,
+      ADD COLUMN IF NOT EXISTS kpi_absolute_error numeric;
+
     DO $$
     BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'he_demo_results'
+          AND column_name = 'expected_amount'
+      ) THEN
+        EXECUTE 'UPDATE he_demo_results SET
+          expected_kpi_amount = COALESCE(expected_kpi_amount, expected_amount),
+          decrypted_kpi_amount = COALESCE(decrypted_kpi_amount, decrypted_amount),
+          kpi_absolute_error = COALESCE(kpi_absolute_error, absolute_error)';
+        ALTER TABLE he_demo_results
+          DROP COLUMN IF EXISTS expected_amount,
+          DROP COLUMN IF EXISTS decrypted_amount,
+          DROP COLUMN IF EXISTS absolute_error;
+      END IF;
+
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public'
@@ -42,10 +69,20 @@ data:
           AND column_name = 'expected_amount'
       ) THEN
         EXECUTE 'INSERT INTO he_demo_results
-          (session_id, expected_amount, decrypted_amount, absolute_error)
+          (session_id, expected_kpi_amount, decrypted_kpi_amount,
+           kpi_absolute_error)
           SELECT session_id, expected_amount, decrypted_amount, absolute_error
           FROM he_demo_sessions WHERE expected_amount IS NOT NULL
-          ON CONFLICT (session_id) DO NOTHING';
+          ON CONFLICT (session_id) DO UPDATE SET
+            expected_kpi_amount = COALESCE(
+              he_demo_results.expected_kpi_amount,
+              EXCLUDED.expected_kpi_amount),
+            decrypted_kpi_amount = COALESCE(
+              he_demo_results.decrypted_kpi_amount,
+              EXCLUDED.decrypted_kpi_amount),
+            kpi_absolute_error = COALESCE(
+              he_demo_results.kpi_absolute_error,
+              EXCLUDED.kpi_absolute_error)';
         ALTER TABLE he_demo_sessions
           DROP COLUMN IF EXISTS expected_amount,
           DROP COLUMN IF EXISTS decrypted_amount,
@@ -80,12 +117,29 @@ data:
       session_id varchar(128) NOT NULL REFERENCES he_demo_sessions(session_id)
         ON DELETE CASCADE,
       operation varchar(16) NOT NULL CHECK (
-        operation IN ('initialize', 'sum', 'multiply', 'verify')
+        operation IN (
+          'initialize', 'sum', 'verify_sum', 'multiply', 'verify', 'verify_kpi'
+        )
       ),
-      outcome varchar(16) NOT NULL CHECK (outcome IN ('COMPLETED')),
+      outcome varchar(16) NOT NULL CHECK (
+        outcome IN ('COMPLETED', 'PASSED', 'FAILED')
+      ),
       completed_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE (session_id, operation)
     );
+
+    ALTER TABLE he_demo_operations
+      DROP CONSTRAINT IF EXISTS he_demo_operations_operation_check,
+      DROP CONSTRAINT IF EXISTS he_demo_operations_outcome_check;
+    ALTER TABLE he_demo_operations
+      ADD CONSTRAINT he_demo_operations_operation_check CHECK (
+        operation IN (
+          'initialize', 'sum', 'verify_sum', 'multiply', 'verify', 'verify_kpi'
+        )
+      ),
+      ADD CONSTRAINT he_demo_operations_outcome_check CHECK (
+        outcome IN ('COMPLETED', 'PASSED', 'FAILED')
+      );
 
     REVOKE ALL ON he_demo_artifacts FROM PUBLIC;
     REVOKE ALL ON he_demo_results FROM PUBLIC;

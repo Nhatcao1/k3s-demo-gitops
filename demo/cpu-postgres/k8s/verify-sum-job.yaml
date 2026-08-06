@@ -1,21 +1,21 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: he-salary-verify-kpi-
+  generateName: he-salary-verify-sum-
   namespace: ${DEMO_NAMESPACE}
   labels:
-    app.kubernetes.io/name: he-salary-verify-kpi
+    app.kubernetes.io/name: he-salary-verify-sum
     app.kubernetes.io/part-of: cpu-postgres-demo
-    he.demo/stage: verify-kpi
+    he.demo/stage: verify-sum
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 900
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: he-salary-verify-kpi
+        app.kubernetes.io/name: he-salary-verify-sum
         app.kubernetes.io/part-of: cpu-postgres-demo
-        he.demo/stage: verify-kpi
+        he.demo/stage: verify-sum
     spec:
       nodeSelector:
         kubernetes.io/hostname: ${DEMO_NODE_NAME}
@@ -24,15 +24,11 @@ spec:
       restartPolicy: Never
       automountServiceAccountToken: false
       containers:
-        - name: trusted-verifier
+        - name: trusted-sum-verifier
           image: ${DEMO_HE_IMAGE}
           imagePullPolicy: Always
-          command:
-            - python
-            - -m
-            - cpu_postgres_demo.cli
-          args:
-            - verify-kpi
+          command: [python, -m, cpu_postgres_demo.cli]
+          args: [verify-sum]
           envFrom:
             - configMapRef:
                 name: cpu-postgres-demo-config
@@ -52,8 +48,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
-              drop:
-                - ALL
+              drop: [ALL]
             readOnlyRootFilesystem: true
           volumeMounts:
             - name: demo-input
