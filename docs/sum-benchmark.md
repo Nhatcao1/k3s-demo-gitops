@@ -21,29 +21,17 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh
 HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh
 ```
 
-Both deploy scripts try to resolve Docker Hub tags to immutable digests. On a
-restricted work server with no Docker Hub access, they warn and continue with
-the tag so the cluster's internal registry mirror can pull it.
+The deploy scripts use `HE_CPU_IMAGE` and `HE_GPU_IMAGE` directly from
+`config/he-lab.env`; they do not contact Docker Hub. For the work-server mirror:
 
-To skip the public lookup explicitly:
-
-```sh
-HE_NAMESPACE=datalake-he HE_DOCKERHUB_RESOLVE_MODE=disabled \
-  ./scripts/benchmark/deploy-cpu-service.sh
+```text
+: "${HE_IMAGE_REPOSITORY:=hub.vtcc.vn:8989/dockerboi99/he_k8s}"
+: "${HE_CPU_IMAGE_TAG:=cpu-latest}"
+: "${HE_GPU_IMAGE_TAG:=gpu-latest}"
 ```
 
-For guaranteed freshness on a restricted server, copy the digest from a
-networked machine or Docker Hub and provide a full immutable reference:
-
-```sh
-HE_NAMESPACE=datalake-he \
-HE_CPU_IMAGE_OVERRIDE='docker.io/dockerboi99/he_k8s@sha256:<cpu-digest>' \
-  ./scripts/benchmark/deploy-cpu-service.sh
-
-HE_NAMESPACE=datalake-he \
-HE_GPU_IMAGE_OVERRIDE='docker.io/dockerboi99/he_k8s@sha256:<gpu-digest>' \
-  ./scripts/benchmark/deploy-gpu-service.sh
-```
+You can also set `HE_CPU_IMAGE` or `HE_GPU_IMAGE` to a full immutable digest in
+that file when the mirror caches a moving tag.
 
 ## Install benchmark dependencies once
 

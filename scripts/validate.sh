@@ -25,7 +25,6 @@ for template in \
   test -f "$template"
 done
 test -f "$repo_dir/scripts/render-he-yaml.py"
-test -f "$repo_dir/scripts/resolve-dockerhub-image.py"
 
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
