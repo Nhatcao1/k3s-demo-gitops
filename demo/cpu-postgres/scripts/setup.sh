@@ -86,7 +86,12 @@ kube apply -f "$rendered_dir/postgres.yaml"
 kube -n "$DEMO_NAMESPACE" rollout status statefulset/cpu-postgres-demo --timeout=10m
 
 schema_job=$(kube create -f "$rendered_dir/schema-job.yaml" -o name)
-kube -n "$DEMO_NAMESPACE" wait --for=condition=complete "$schema_job" --timeout=5m
+if ! kube -n "$DEMO_NAMESPACE" wait --for=condition=complete \
+  "$schema_job" --timeout=5m; then
+  kube -n "$DEMO_NAMESPACE" logs "$schema_job" --all-containers=true || true
+  kube -n "$DEMO_NAMESPACE" describe "$schema_job" || true
+  exit 1
+fi
 kube -n "$DEMO_NAMESPACE" logs "$schema_job"
 
 echo "Setup complete. Continue with the README job commands."

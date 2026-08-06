@@ -1,14 +1,14 @@
 flowchart LR
     A[CSV salaries + KPI] --> B[Initialize Job]
-    A --> R[Exact expected amount]
+    A --> R[Python calculates expected amount]
     B --> C[Create context and keys]
     C --> D[Encrypt salaries and KPI]
     D --> E[(PostgreSQL)]
-    R --> E
+    R --> T[(he_demo_results)]
     E --> F[SUM Job]
     F --> E
     E --> G[Multiply Job]
     G --> E
     E --> H[Verify Job uses secret key]
     H --> I[Decrypted amount + error]
-    I --> E
+    I --> T

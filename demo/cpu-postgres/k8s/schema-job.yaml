@@ -24,10 +24,15 @@ spec:
           image: ${DEMO_POSTGRES_IMAGE}
           imagePullPolicy: IfNotPresent
           command:
-            - psql
+            - sh
+            - -ec
           args:
-            - --set=ON_ERROR_STOP=1
-            - --file=/schema/schema.sql
+            - |
+              until pg_isready -h "$PGHOST" -p "$PGPORT" \
+                -U "$PGUSER" -d "$PGDATABASE"; do
+                sleep 2
+              done
+              exec psql --set=ON_ERROR_STOP=1 --file=/schema/schema.sql
           envFrom:
             - configMapRef:
                 name: cpu-postgres-demo-config

@@ -15,9 +15,6 @@ data:
       ),
       valid_count integer NOT NULL CHECK (valid_count BETWEEN 1 AND 8192),
       kpi_scale integer NOT NULL CHECK (kpi_scale > 0),
-      expected_amount numeric NOT NULL,
-      decrypted_amount numeric,
-      absolute_error numeric CHECK (absolute_error >= 0),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );
@@ -26,12 +23,36 @@ data:
       ADD COLUMN IF NOT EXISTS scheme varchar(4) NOT NULL DEFAULT 'ckks';
     ALTER TABLE he_demo_sessions
       ADD COLUMN IF NOT EXISTS kpi_scale integer NOT NULL DEFAULT 10;
-    ALTER TABLE he_demo_sessions
-      ADD COLUMN IF NOT EXISTS expected_amount numeric;
-    ALTER TABLE he_demo_sessions
-      ADD COLUMN IF NOT EXISTS decrypted_amount numeric;
-    ALTER TABLE he_demo_sessions
-      ADD COLUMN IF NOT EXISTS absolute_error numeric;
+
+    CREATE TABLE IF NOT EXISTS he_demo_results (
+      session_id varchar(128) PRIMARY KEY REFERENCES he_demo_sessions(session_id)
+        ON DELETE CASCADE,
+      expected_amount numeric NOT NULL,
+      decrypted_amount numeric,
+      absolute_error numeric CHECK (absolute_error >= 0),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'he_demo_sessions'
+          AND column_name = 'expected_amount'
+      ) THEN
+        EXECUTE 'INSERT INTO he_demo_results
+          (session_id, expected_amount, decrypted_amount, absolute_error)
+          SELECT session_id, expected_amount, decrypted_amount, absolute_error
+          FROM he_demo_sessions WHERE expected_amount IS NOT NULL
+          ON CONFLICT (session_id) DO NOTHING';
+        ALTER TABLE he_demo_sessions
+          DROP COLUMN IF EXISTS expected_amount,
+          DROP COLUMN IF EXISTS decrypted_amount,
+          DROP COLUMN IF EXISTS absolute_error;
+      END IF;
+    END
+    $$;
 
     CREATE TABLE IF NOT EXISTS he_demo_artifacts (
       session_id varchar(128) NOT NULL REFERENCES he_demo_sessions(session_id)
@@ -67,5 +88,6 @@ data:
     );
 
     REVOKE ALL ON he_demo_artifacts FROM PUBLIC;
+    REVOKE ALL ON he_demo_results FROM PUBLIC;
     REVOKE ALL ON he_demo_sessions FROM PUBLIC;
     REVOKE ALL ON he_demo_operations FROM PUBLIC;
