@@ -133,6 +133,19 @@ The script does not redeploy. It opens temporary port-forwards, generates or
 reuses `data/sum-benchmark/values.csv`, calls the running services, saves the
 results, and closes the port-forwards.
 
+Do not start separate `kubectl port-forward` commands before `run.sh`. The
+script owns ports `HE_CPU_LOCAL_PORT` and `HE_GPU_LOCAL_PORT`, waits for both
+Deployments and `/readyz` endpoints, and closes both tunnels on exit. If a
+tunnel or remote Pod fails, it now prints the corresponding log immediately:
+
+```text
+benchmark_runs/sum/<UTC-time>/cpu-port-forward.log
+benchmark_runs/sum/<UTC-time>/gpu-port-forward.log
+```
+
+Use different values in `config/he-lab.env` only when port 18080 or 18081 is
+already occupied.
+
 ```text
 benchmark_runs/sum/<UTC-time>/summary.csv
 benchmark_runs/sum/<UTC-time>/details.json
