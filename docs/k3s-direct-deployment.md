@@ -3,8 +3,9 @@
 Argo CD is intentionally skipped for this phase. The helper scripts apply
 tracked Kubernetes templates directly with `kubectl`.
 
-One Deployment and one ClusterIP Service per backend handle all six operations:
-`add`, `subtract`, `multiply`, `square`, `sum`, and `mean`. Do not create a
+One Deployment and one ClusterIP Service per backend handle all seven operations:
+`add`, `subtract`, `multiply`, `square`, `sum`, `mean`, and population
+`variance`. Do not create a
 separate Service for each operation.
 
 ## 1. Select the application image
@@ -117,10 +118,10 @@ curl -fsS http://127.0.0.1:18081/readyz
 curl -fsS http://127.0.0.1:18081/v1/capabilities | python3 -m json.tool
 ```
 
-The capabilities response must list all six main operations:
+The capabilities response must list all seven main operations:
 
 ```text
-add, subtract, multiply, square, sum, mean
+add, subtract, multiply, square, sum, mean, variance
 ```
 
 Then call the small plaintext SUM demo:
@@ -144,15 +145,13 @@ All paths below use the same `he-evaluator-gpu` Deployment and Service:
 | `GET /healthz` | HTTP process is alive |
 | `GET /readyz` | GPU runtime and native workers are ready |
 | `GET /v1/capabilities` | Runtime backend and supported operations |
-| `POST /v1/evaluate` | Main ciphertext API: `add`, `subtract`, `multiply`, `square`, `sum`, `mean` |
-| `POST /v1/demo/evaluate` | Small plaintext demo; currently GPU `add`, `subtract`, `multiply`, `sum` |
+| `POST /v1/evaluate` | Main ciphertext API: `add`, `subtract`, `multiply`, `square`, `sum`, `mean`, `variance` |
+| `POST /v1/demo/evaluate` | Small plaintext HE demo for the same seven operations |
 | `POST /v1/demo/sum` | Large plaintext-input SUM benchmark helper |
 
-`square` and `mean` are newly exposed through the main encrypted-artifact
-endpoint but are not yet present in `/v1/demo/evaluate`. This is the immediate
-demo backlog, not an intentional long-term difference. From now on every new
-main operation must add the same demo operation so it can be checked quickly
-after deployment and reused by the benchmark driver.
+`variance` means population variance `E[x²] - E[x]²`. It requires both
+`multiplication_keys` and `rotation_keys` in `/v1/evaluate`; older single-key
+operations may continue using `evaluation_keys`.
 
 The demo route accepts plaintext and performs key generation, encryption, HE
 evaluation, and decryption inside its native backend. It proves that the image,
@@ -207,6 +206,28 @@ curl -fsS -X POST http://127.0.0.1:18081/v1/evaluate \
 
 The response contains a Base64 result `ciphertext`; it does not contain the
 plaintext result or a secret key. The client must deserialize and decrypt it.
+
+Quick GPU variance demo through the port-forward above:
+
+```sh
+curl -sS -X POST http://127.0.0.1:18081/v1/demo/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"operation":"variance","values_a":[1,2,3,4]}'
+```
+
+The decrypted population variance should be approximately `1.25`.
+
+## Known image-pull error: 2026-08-06
+
+- The exact GitLab tag was `gpu-7d830d6f` (8 characters), not the 7-character
+  local Git display `gpu-7d830d6`.
+- `http: server gave HTTP response to HTTPS client` from
+  `hub.vtcc.vn:8989` means containerd tried HTTPS against a mirror serving
+  HTTP. It does not mean Docker Hub lacks the image.
+- Use `docker.io/dockerboi99/he_k8s:<exact-tag>` when direct Docker Hub HTTPS
+  works. Otherwise a cluster administrator must configure the mirror as plain
+  HTTP on every target node. A Kubernetes TLS-skip flag or imagePullSecret
+  cannot repair this node-runtime protocol mismatch.
 
 ## 5. Optional external access through K3s Traefik
 

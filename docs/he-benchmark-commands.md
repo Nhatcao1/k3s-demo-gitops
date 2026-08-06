@@ -120,6 +120,11 @@ python scripts/benchmark/service_benchmark.py \
   --url http://127.0.0.1:18080/v1/evaluate \
   --workload sum \
   --value-count 50000
+
+python scripts/benchmark/service_benchmark.py \
+  --url http://127.0.0.1:18080/v1/evaluate \
+  --workload variance \
+  --value-count 50000
 ```
 
 `primitive` runs `add`, `subtract`, and `multiply`. This path creates no new
@@ -137,6 +142,13 @@ SUM runs test encrypted packed `sum`:
 
 ```sh
 ./scripts/benchmark/run-he-bench.sh cpu sum 50000
+```
+
+Population variance runs `E[x²] - E[x]²` and compares each encrypted CKKS
+chunk with the matching Python variance:
+
+```sh
+./scripts/benchmark/run-he-bench.sh cpu variance 50000
 ```
 
 The command creates the benchmark code ConfigMap, creates a Kubernetes Job,
@@ -159,6 +171,7 @@ kubectl -n he-dev rollout status deployment/he-evaluator-gpu --timeout=15m
 
 ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
 ./scripts/benchmark/run-he-bench.sh gpu sum 50000
+./scripts/benchmark/run-he-bench.sh gpu variance 50000
 ```
 
 The benchmark command does not create the evaluator. If it reports that
@@ -181,6 +194,7 @@ Allowed sizes are `50000`, `100000`, `500000`, `1000000`, and `10000000`:
 ```sh
 ./scripts/benchmark/run-he-bench.sh cpu primitive 500000
 ./scripts/benchmark/run-he-bench.sh cpu sum 500000
+./scripts/benchmark/run-he-bench.sh cpu variance 500000
 ```
 
 ## 5. Run the complete Job matrix
@@ -190,6 +204,7 @@ Start this only after both 50k Jobs pass:
 ```sh
 ./scripts/benchmark/run-he-bench.sh cpu primitive all
 ./scripts/benchmark/run-he-bench.sh cpu sum all
+./scripts/benchmark/run-he-bench.sh cpu variance all
 ```
 
 ## 6. Job repetitions and timeouts
@@ -236,6 +251,10 @@ are bounded deterministic values generated one CKKS chunk at a time, allowing
 the 10m test without loading 10m Python values into memory simultaneously. The
 evaluator is stateless and does not save keys, input ciphertexts, or result
 ciphertexts.
+
+For `variance`, a 50k-or-larger run measures and validates every CKKS chunk;
+it does not claim one global variance across all chunks. A global variance
+needs encrypted cross-chunk moment aggregation and remains separate work.
 
 ## Ciphertext chaining and lifetime
 

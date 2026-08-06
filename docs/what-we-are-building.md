@@ -10,13 +10,12 @@ We are developing one function at a time. The main ciphertext API currently
 contains:
 
 ```text
-add -> subtract -> multiply -> square -> sum -> mean
+add -> subtract -> multiply -> square -> sum -> mean -> variance
 ```
 
-`square` and `mean` are not considered fully delivered yet because their
-matching quick-demo paths are still missing. The next candidates, after the
-six current functions are tested and benchmarked, are `weighted_sum`,
-`variance`, and `covariance`.
+`variance` is population variance `E[x²] - E[x]²` and needs both multiplication
+and rotation keys. The next candidates after correctness and benchmark checks
+are `weighted_sum` and `covariance`.
 
 ## Function delivery rule
 
@@ -40,8 +39,8 @@ Current demo gap:
 
 | Backend | Main `/v1/evaluate` | Demo coverage now | Required next work |
 | --- | --- | --- | --- |
-| CPU | six functions | `/v1/demo/sum`: `sum` | add one demo path for all six functions |
-| GPU | six functions | `/v1/demo/evaluate`: `add`, `subtract`, `multiply`, `sum` | add `square` and `mean` |
+| CPU | seven functions | `/v1/demo/evaluate`: all seven; `/v1/demo/sum`: large SUM | benchmark beyond SUM |
+| GPU | seven functions | `/v1/demo/evaluate`: all seven; `/v1/demo/sum`: large SUM | benchmark beyond SUM |
 
 ## Security and service boundary
 
@@ -67,7 +66,7 @@ The API is currently a low-level encrypted evaluator API:
 
 ```text
 POST /v1/evaluate
-operation = add | subtract | multiply | square | sum | mean
+operation = add | subtract | multiply | square | sum | mean | variance
 ```
 
 The longer-term API should hide HE parameters behind a reviewable plan. It
@@ -89,7 +88,7 @@ High-level GPU file flow:
 
 ```mermaid
 flowchart LR
-    HE["gpu/worker/src/fides_backend.cpp<br/>six main HE operations"]
+    HE["gpu/worker/src/fides_backend.cpp<br/>seven main HE operations"]
     WORKER["gpu/worker/src/main.cpp<br/>connects API to FIDESlib backend"]
     API["gpu/api/app.py<br/>exposes /v1/evaluate"]
     IMAGE["gpu/Dockerfile<br/>packages API + worker + FIDESlib"]
@@ -162,15 +161,15 @@ stabilized. Benchmark result files stay outside Git through
 
 ## Development roadmap
 
-1. Close the demo gap: expose `square` and `mean` in the GPU native demo and
-   expose the same six-operation demo contract on CPU.
+1. Build both images and verify `square`, `mean`, and `variance` through the
+   CPU/GPU native demo endpoints on K3s.
 2. Add one small direct test command that runs the selected operation against
    an already deployed Service; deployment must remain a separate command.
 3. Benchmark `sum` first at 50k, 100k, 500k, and 1m, then extend the same
-   driver to the other five functions. Run 10m only after smaller sizes pass.
+   driver to the other six functions. Run 10m only after smaller sizes pass.
 4. Verify the real `/v1/evaluate` ciphertext path independently; a passing
    plaintext demo does not prove the secretless serialization path.
-5. Add `weighted_sum`, then `variance` and `covariance`, one vertical slice at
+5. Add `weighted_sum`, then `covariance`, one vertical slice at
    a time under the function delivery rule above.
 6. Tune depth, modulus chain, rescale, relinearization, rotations, threading,
    and GPU batch sizes only after correctness and comparable timing exist.

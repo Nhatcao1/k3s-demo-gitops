@@ -16,7 +16,8 @@ from urllib.request import Request, urlopen
 
 
 PRIMITIVE_OPERATIONS = ("add", "subtract", "multiply")
-OPERATIONS = PRIMITIVE_OPERATIONS + ("sum",)
+OPERATIONS = PRIMITIVE_OPERATIONS + ("sum", "variance")
+REDUCTION_OPERATIONS = ("sum", "variance")
 
 
 def _fides_sum_rotation_indices(valid_count: int) -> list[int]:
@@ -97,6 +98,9 @@ def _python_operation(operation: str, left: list[float], right: list[float]) -> 
         return [a * b for a, b in zip(left, right)]
     if operation == "sum":
         return sum(left)
+    if operation == "variance":
+        mean = sum(left) / len(left)
+        return sum((value - mean) ** 2 for value in left) / len(left)
     raise ValueError(f"unsupported operation: {operation}")
 
 
@@ -107,7 +111,7 @@ def _error(observed: list[float] | float, expected: list[float] | float) -> tupl
         pairs = zip(observed, expected)
     else:
         if isinstance(observed, list):
-            raise RuntimeError("decrypted SUM result is not a scalar")
+            raise RuntimeError("decrypted reduction result is not a scalar")
         pairs = [(observed, expected)]
     absolute = 0.0
     relative = 0.0
@@ -126,7 +130,7 @@ def _create_client(
 ) -> tuple[Any, Any, bytes, bytes | None, dict[str, bytes], float]:
     started = time.perf_counter()
     parameters = openfhe.CCParamsCKKSRNS()
-    parameters.SetMultiplicativeDepth(1)
+    parameters.SetMultiplicativeDepth(2 if "variance" in operations else 1)
     parameters.SetScalingModSize(50)
     parameters.SetBatchSize(batch_size)
     context = openfhe.GenCryptoContext(parameters)
@@ -138,9 +142,9 @@ def _create_client(
     ):
         context.Enable(feature)
     keys = context.KeyGen()
-    if "multiply" in operations:
+    if "multiply" in operations or "variance" in operations:
         context.EvalMultKeyGen(keys.secretKey)
-    if "sum" in operations:
+    if "sum" in operations or "variance" in operations:
         context.EvalSumKeyGen(keys.secretKey)
         if public_key_required:
             context.EvalRotateKeyGen(
@@ -156,16 +160,16 @@ def _create_client(
                 openfhe, root / "public-key.bin", keys.publicKey
             )
         evaluation_keys: dict[str, bytes] = {}
-        if "multiply" in operations:
+        if "multiply" in operations or "variance" in operations:
             path = root / "eval-mult.bin"
             if not context.SerializeEvalMultKey(str(path), openfhe.BINARY):
                 raise RuntimeError("could not serialize multiplication keys")
-            evaluation_keys["multiply"] = path.read_bytes()
-        if "sum" in operations:
+            evaluation_keys["multiplication"] = path.read_bytes()
+        if "sum" in operations or "variance" in operations:
             path = root / "eval-sum.bin"
             if not context.SerializeEvalAutomorphismKey(str(path), openfhe.BINARY):
                 raise RuntimeError("could not serialize SUM keys")
-            evaluation_keys["sum"] = path.read_bytes()
+            evaluation_keys["rotation"] = path.read_bytes()
     return (
         context,
         keys,
@@ -194,9 +198,6 @@ def _run_operation(
     evaluation_keys: dict[str, bytes],
 ) -> dict[str, Any]:
     context_encoded = _encoded(context_bytes)
-    evaluation_key_encoded = (
-        _encoded(evaluation_keys[operation]) if operation in evaluation_keys else None
-    )
     rows: list[dict[str, Any]] = []
 
     with tempfile.TemporaryDirectory(prefix=f"he-service-{operation}-") as directory:
@@ -244,9 +245,22 @@ def _run_operation(
                 if right_ciphertext is not None:
                     right_bytes = _serialize(openfhe, root / "right.bin", right_ciphertext)
                     payload["ciphertext_b"] = _encoded(right_bytes)
-                if evaluation_key_encoded is not None:
-                    payload["evaluation_keys"] = evaluation_key_encoded
-                if operation == "sum":
+                if operation == "multiply":
+                    payload["evaluation_keys"] = _encoded(
+                        evaluation_keys["multiplication"]
+                    )
+                elif operation == "sum":
+                    payload["evaluation_keys"] = _encoded(
+                        evaluation_keys["rotation"]
+                    )
+                elif operation == "variance":
+                    payload["multiplication_keys"] = _encoded(
+                        evaluation_keys["multiplication"]
+                    )
+                    payload["rotation_keys"] = _encoded(
+                        evaluation_keys["rotation"]
+                    )
+                if operation in REDUCTION_OPERATIONS:
                     payload["valid_count"] = count
                 totals["client_serialize_seconds"] += time.perf_counter() - serialization_started
 
@@ -268,10 +282,12 @@ def _run_operation(
                 if not ok:
                     raise RuntimeError("could not deserialize result ciphertext")
                 plaintext = context.Decrypt(keys.secretKey, result_ciphertext)
-                output_length = 1 if operation == "sum" else count
+                output_length = 1 if operation in REDUCTION_OPERATIONS else count
                 plaintext.SetLength(output_length)
                 values = [float(value) for value in plaintext.GetRealPackedValue()[:output_length]]
-                observed: list[float] | float = values[0] if operation == "sum" else values
+                observed: list[float] | float = (
+                    values[0] if operation in REDUCTION_OPERATIONS else values
+                )
                 totals["client_decrypt_seconds"] += time.perf_counter() - decrypt_started
 
                 absolute_error, relative_error = _error(observed, expected)
@@ -354,7 +370,10 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     except ImportError as error:
         raise RuntimeError("OpenFHE-Python is required in the benchmark client") from error
 
-    operations = PRIMITIVE_OPERATIONS if args.workload == "primitive" else ("sum",)
+    operations = (
+        PRIMITIVE_OPERATIONS if args.workload == "primitive"
+        else (args.workload,)
+    )
     capabilities = _check_capabilities(args.url, args.timeout, operations)
     public_key_required = bool(capabilities.get("public_key_required_by_api", False))
     (
@@ -405,7 +424,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://he-evaluator:8080/v1/evaluate")
-    parser.add_argument("--workload", choices=("primitive", "sum"), required=True)
+    parser.add_argument(
+        "--workload", choices=("primitive", "sum", "variance"), required=True
+    )
     parser.add_argument("--value-count", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--repetitions", type=int, default=1)

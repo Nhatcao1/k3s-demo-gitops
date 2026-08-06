@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-  echo "Usage: $0 <cpu|gpu> <primitive|sum> <50000|100000|500000|1000000|10000000|all>" >&2
+  echo "Usage: $0 <cpu|gpu> <primitive|sum|variance> <50000|100000|500000|1000000|10000000|all>" >&2
   exit 2
 }
 
@@ -22,7 +22,7 @@ case "$backend" in
   *) usage ;;
 esac
 case "$workload" in
-  primitive|sum) ;;
+  primitive|sum|variance) ;;
   *) usage ;;
 esac
 

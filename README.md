@@ -63,7 +63,7 @@ Deploy the successful public Docker Hub images:
 ```
 
 Each backend Deployment exposes one ClusterIP Service for `add`, `subtract`,
-`multiply`, `square`, `sum`, and `mean`. No Pod IP or port-forward is needed
+`multiply`, `square`, `sum`, `mean`, and population `variance`. No Pod IP or port-forward is needed
 for in-cluster clients.
 
 Full commands, verification, and optional Traefik access are in
