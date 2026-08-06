@@ -49,15 +49,16 @@ docker.io/dockerboi99/he_k8s:gpu-latest
 
 ## Direct K3s deployment
 
-Deploy the successful public Docker Hub image:
+Deploy the successful public Docker Hub images:
 
 ```sh
 ./scripts/benchmark/deploy-cpu-service.sh
+./scripts/benchmark/deploy-gpu-service.sh
 ```
 
-The Deployment exposes one ClusterIP Service for `add`, `subtract`,
-`multiply`, and `sum`. No Pod IP or port-forward is needed for in-cluster
-benchmark Jobs.
+Each backend Deployment exposes one ClusterIP Service for `add`, `subtract`,
+`multiply`, `square`, `sum`, and `mean`. No Pod IP or port-forward is needed
+for in-cluster clients.
 
 Full commands, verification, and optional Traefik access are in
 [docs/k3s-direct-deployment.md](docs/k3s-direct-deployment.md).

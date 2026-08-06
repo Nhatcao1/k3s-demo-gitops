@@ -3,9 +3,9 @@
 Argo CD is intentionally skipped for this phase. The helper scripts apply
 tracked Kubernetes templates directly with `kubectl`.
 
-One Deployment and one ClusterIP Service handle all four operations:
-`add`, `subtract`, `multiply`, and `sum`. Do not create separate primitive and
-SUM services.
+One Deployment and one ClusterIP Service per backend handle all six operations:
+`add`, `subtract`, `multiply`, `square`, `sum`, and `mean`. Do not create a
+separate Service for each operation.
 
 ## 1. Select the application image
 
@@ -77,7 +77,7 @@ http://he-evaluator:8080
 
 They do not use Pod IPs and do not require `kubectl port-forward`.
 
-## Direct SUM calls without benchmark code
+## Direct health, capability, and SUM calls
 
 These commands send `[12, 7, 8, 9]` directly to each deployed service. Both
 services encrypt the values inside their own runtime, perform the SUM on
@@ -107,7 +107,21 @@ Stop the CPU port-forward with `Ctrl-C`, then keep this running in terminal 1:
 kubectl -n datalake-he port-forward service/he-evaluator-gpu 18081:8080
 ```
 
-Call the GPU service from terminal 2:
+Check the deployed image API from terminal 2:
+
+```sh
+curl -fsS http://127.0.0.1:18081/healthz
+curl -fsS http://127.0.0.1:18081/readyz
+curl -fsS http://127.0.0.1:18081/v1/capabilities | python3 -m json.tool
+```
+
+The capabilities response must list all six main operations:
+
+```text
+add, subtract, multiply, square, sum, mean
+```
+
+Then call the small plaintext SUM demo:
 
 ```sh
 curl -fsS -X POST http://127.0.0.1:18081/v1/demo/sum \
@@ -118,6 +132,62 @@ curl -fsS -X POST http://127.0.0.1:18081/v1/demo/sum \
 The CPU path calls OpenFHE `EvalSum`; the GPU path starts the native
 `he-gpu-demo` executable, which calls FIDESlib `AccumulateSum`. These are
 trusted functional checks, not the final secretless ciphertext API.
+
+### FIDESlib endpoints exposed by the GPU Service
+
+All paths below use the same `he-evaluator-gpu` Deployment and Service:
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /healthz` | HTTP process is alive |
+| `GET /readyz` | GPU runtime and native workers are ready |
+| `GET /v1/capabilities` | Runtime backend and supported operations |
+| `POST /v1/evaluate` | Main ciphertext API: `add`, `subtract`, `multiply`, `square`, `sum`, `mean` |
+| `POST /v1/demo/evaluate` | Small plaintext demo: `add`, `subtract`, `multiply`, `sum` only |
+| `POST /v1/demo/sum` | Large plaintext-input SUM benchmark helper |
+
+`square` and `mean` are newly exposed through the main encrypted-artifact
+endpoint. They are intentionally not added to `/v1/demo/evaluate`. A trusted
+client creates and serializes the CKKS artifacts, calls the service, and keeps
+the secret key outside the evaluator Pod.
+
+`square` request shape:
+
+```json
+{
+  "operation": "square",
+  "context": "<base64 FIDESlib-compatible OpenFHE context>",
+  "public_key": "<base64 public key>",
+  "ciphertext_a": "<base64 input ciphertext>",
+  "evaluation_keys": "<base64 multiplication/relinearization keys>",
+  "request_id": "square-demo-1"
+}
+```
+
+`mean` request shape:
+
+```json
+{
+  "operation": "mean",
+  "context": "<base64 FIDESlib-compatible OpenFHE context>",
+  "public_key": "<base64 public key>",
+  "ciphertext_a": "<base64 input ciphertext>",
+  "evaluation_keys": "<base64 rotation/automorphism keys>",
+  "valid_count": 8192,
+  "request_id": "mean-demo-1"
+}
+```
+
+Submit a generated request file through the forwarded GPU port:
+
+```sh
+curl -fsS -X POST http://127.0.0.1:18081/v1/evaluate \
+  -H 'Content-Type: application/json' \
+  --data-binary @gpu-request.json | python3 -m json.tool
+```
+
+The response contains a Base64 result `ciphertext`; it does not contain the
+plaintext result or a secret key. The client must deserialize and decrypt it.
 
 ## 5. Optional external access through K3s Traefik
 
