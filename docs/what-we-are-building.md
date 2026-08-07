@@ -9,11 +9,11 @@ need to manage OpenFHE calls, CUDA code, rescaling, or evaluation keys itself.
 We are developing one function at a time. The current functions are:
 
 ```text
-add -> subtract -> multiply -> sum
+add -> subtract -> multiply -> multiply_plain -> square -> sum -> mean -> variance
 ```
 
-Later candidates are `square`, `mean`, and `variance`. They should not be
-added until the current functions are correct and benchmarked.
+`variance` currently means population variance. The feature image also runs
+the separate PostgreSQL salary SUM and weighted KPI demo Jobs.
 
 ## Security and service boundary
 
@@ -37,7 +37,7 @@ The API is currently a low-level encrypted evaluator API:
 
 ```text
 POST /v1/evaluate
-operation = add | subtract | multiply | sum
+operation = add | subtract | multiply | multiply_plain | square | sum | mean | variance
 ```
 
 The longer-term API should hide HE parameters behind a reviewable plan. It

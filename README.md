@@ -55,9 +55,14 @@ Deploy the successful public Docker Hub image:
 ./scripts/benchmark/deploy-cpu-service.sh
 ```
 
-The Deployment exposes one ClusterIP Service for `add`, `subtract`,
-`multiply`, and `sum`. No Pod IP or port-forward is needed for in-cluster
+The feature CPU image exposes one ClusterIP Service for `add`, `subtract`,
+`multiply`, `multiply_plain`, `square`, `sum`, `mean`, and population
+`variance`. No Pod IP or port-forward is needed for in-cluster
 benchmark Jobs.
+
+The Postgres-specific setup, immutable image tags, Job workflow, and direct
+`square`/`mean`/`variance` demo commands are in
+[demo/cpu-postgres/README.md](demo/cpu-postgres/README.md).
 
 Full commands, verification, and optional Traefik access are in
 [docs/k3s-direct-deployment.md](docs/k3s-direct-deployment.md).

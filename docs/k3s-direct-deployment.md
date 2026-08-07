@@ -3,9 +3,9 @@
 Argo CD is intentionally skipped for this phase. The helper scripts apply
 tracked Kubernetes templates directly with `kubectl`.
 
-One Deployment and one ClusterIP Service handle all four operations:
-`add`, `subtract`, `multiply`, and `sum`. Do not create separate primitive and
-SUM services.
+One Deployment and one ClusterIP Service handle all CPU operations:
+`add`, `subtract`, `multiply`, `multiply_plain`, `square`, `sum`, `mean`, and
+population `variance`. Do not create a Service per function.
 
 ## 1. Select the application image
 
@@ -60,6 +60,13 @@ The short repeatable command is:
 ./scripts/benchmark/deploy-cpu-service.sh
 ```
 
+For the feature build containing the Postgres demo and the new functions, use
+its immutable short tag:
+
+```sh
+./scripts/benchmark/deploy-cpu-service.sh cpu-8d51c282
+```
+
 It renders `k8s/cpu-evaluator.yaml` using `config/he-lab.env`, applies the
 Deployment and Service, and restarts the Deployment so a moving `cpu-latest`
 tag is pulled again.
@@ -90,6 +97,21 @@ kubectl -n he-dev run he-capabilities-check \
   --image=curlimages/curl:8.15.0 \
   --command -- curl -fsS http://he-evaluator:8080/v1/capabilities
 ```
+
+For a quick plaintext diagnostic from the K3s server, forward the Service and
+call the real OpenFHE demo path:
+
+```sh
+kubectl -n he-dev port-forward service/he-evaluator 18080:8080
+
+curl -sS -X POST http://127.0.0.1:18080/v1/demo/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"operation":"mean","values_a":[1,2,3,4]}'
+```
+
+Expected `values` is approximately `[2.5]`. See
+`demo/cpu-postgres/README.md` for `square` and `variance` commands and for the
+important distinction between this plaintext diagnostic and `/v1/evaluate`.
 
 ## 5. Optional external access through K3s Traefik
 

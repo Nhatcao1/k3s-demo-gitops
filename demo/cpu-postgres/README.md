@@ -32,6 +32,17 @@ cd k3s-demo-gitops/demo/cpu-postgres
 ```
 
 The demo pulls the public image `docker.io/dockerboi99/he_k8s:cpu-postgres-demo`.
+Build commit `8d51c2826f8eb0a247d687a79d9305c75573fa56` publishes three equivalent
+tags after its GitLab pipeline succeeds:
+
+```text
+cpu-postgres-demo
+cpu-8d51c282
+cpu-8d51c2826f8eb0a247d687a79d9305c75573fa56
+```
+
+Use `cpu-postgres-demo` for convenience. Use either immutable SHA tag when
+you must prove exactly which application code ran.
 
 Optional: verify the K3s node can pull it before setup:
 
@@ -40,6 +51,57 @@ sudo k3s crictl pull docker.io/dockerboi99/he_k8s:cpu-postgres-demo
 ```
 
 No GitLab branch switch is required for normal builds: a push to `feat/cpu-postgres-demo` triggers the app pipeline and publishes this tag. If the Docker Hub CI variables are protected, protect this feature branch once before retrying the pipeline.
+
+### Functions included in the same CPU image
+
+The Postgres workflow Jobs still execute only the salary SUM and weighted KPI
+calculation described below. The same image also contains the general CPU HE
+service with:
+
+```text
+add, subtract, multiply, multiply_plain, square, sum, mean, variance
+```
+
+`variance` is population variance `E[x²] - E[x]²`. The Postgres workflow and
+the general HTTP demo are separate entry points; adding these functions does
+not change the stored salary/KPI workflow.
+
+To deploy the HTTP evaluator from the repository root:
+
+```sh
+cd ../..
+./scripts/benchmark/deploy-cpu-service.sh cpu-8d51c282
+kubectl -n he-dev rollout status deployment/he-evaluator-cpu --timeout=10m
+```
+
+In terminal 1:
+
+```sh
+kubectl -n he-dev port-forward service/he-evaluator 18080:8080
+```
+
+In terminal 2, verify the image and run the new demos:
+
+```sh
+curl -sS http://127.0.0.1:18080/v1/capabilities | python3 -m json.tool
+
+curl -sS -X POST http://127.0.0.1:18080/v1/demo/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"operation":"square","values_a":[1,2,3,4]}'
+
+curl -sS -X POST http://127.0.0.1:18080/v1/demo/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"operation":"mean","values_a":[1,2,3,4]}'
+
+curl -sS -X POST http://127.0.0.1:18080/v1/demo/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"operation":"variance","values_a":[1,2,3,4]}'
+```
+
+Expected `values` are `[1,4,9,16]`, `[2.5]`, and approximately `[1.25]`.
+This endpoint accepts plaintext deliberately for a quick functional check; it
+is not the secretless production boundary. `POST /v1/evaluate` remains the
+ciphertext API.
 
 ## 2. Configure and generate input
 
