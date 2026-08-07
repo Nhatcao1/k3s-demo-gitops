@@ -1,293 +1,265 @@
-# Deployed-service benchmark commands
+# HE benchmark: overall CPU and GPU guide
 
-These benchmarks call the already-deployed evaluator Service. For quick CPU
-development, port-forward the Service and run the Python client directly. A
-Kubernetes Job remains available for cluster-side and GPU testing.
+This is the main benchmark guide. Start here.
+
+The server needs only `k3s-demo-gitops`, `kubectl`, and access to the container
+registry. OpenFHE-Python stays in the CPU image. FIDESlib and its patched
+OpenFHE stay in the separate GPU image.
+
+## Pick the benchmark you need
+
+| Goal | Command | What it compares |
+| --- | --- | --- |
+| Compare SUM performance | `scripts/benchmark/sum/run.sh` | Pandas vs CPU OpenFHE vs GPU FIDESlib |
+| Test one backend and operation | `scripts/benchmark/run-he-bench.sh` | Python reference vs encrypted `/v1/evaluate` |
+
+Use the SUM comparison first. It is the quickest way to confirm that both
+services produce an accurate result and to compare their latency.
+
+Neither command redeploys an evaluator. Both create a normal Kubernetes Job
+inside `HE_NAMESPACE`; no `kubectl port-forward`, server virtual environment,
+or local OpenFHE installation is required.
+
+## What code is called
+
+### SUM comparison
 
 ```text
-benchmark client Job
-  -> http://he-evaluator:8080/v1/evaluate
-  -> he-evaluator-cpu Deployment
+scripts/benchmark/sum/run.sh
+  -> Kubernetes benchmark Job
+  -> scripts/benchmark/sum/compare_sum.py
+     -> Pandas plaintext SUM
+     -> CPU POST /v1/demo/sum
+     -> GPU POST /v1/demo/sum
 ```
 
-Neither method redeploys the evaluator. Only
-`scripts/benchmark/deploy-cpu-service.sh` and `deploy-gpu-service.sh` change the
-evaluator Deployments.
-
-## Benchmark files
-
-All benchmark and direct-deployment scripts live together:
+CPU service flow in `k3s-demo-app`:
 
 ```text
-scripts/benchmark/
-├── deploy-cpu-service.sh
-├── deploy-gpu-service.sh
-├── run-he-bench.sh
-├── service_benchmark.py
-├── primitives.py
-├── payment_diff_sum_mean.py
-├── prepare-he-bench-data.sh
-└── prepare_full_installments_columns.py
-
-k8s/
-├── cpu-evaluator.yaml
-├── gpu-evaluator.yaml
-└── benchmark-job.yaml
+api/app.py
+  -> backends/openfhe_demo_sum.py
+  -> OpenFHE-Python: keygen -> encrypt -> EvalSum -> decrypt
 ```
 
-`service_benchmark.py` is the active implementation. The small
-`primitives.py` and `payment_diff_sum_mean.py` entry points use the same
-service benchmark implementation.
+GPU service flow in `k3s-demo-app`:
 
-Shared non-secret K3s settings are in `config/he-lab.env`. Change that one file
-before pushing if the namespace, Docker Hub images, or Service names differ on
-another server.
+```text
+gpu/api/app.py
+  -> /src/worker/build/he-gpu-demo
+  -> gpu/worker/src/demo_main.cpp
+  -> gpu/worker/src/fides_backend.cpp
+  -> FIDESlib: encrypt -> AccumulateSum -> decrypt
+```
 
-The YAML files are normal tracked templates. `${HE_...}` values come from
-`config/he-lab.env`; `${BENCH_...}` values come from the benchmark command.
-The scripts render them with `scripts/render-he-yaml.py` and pipe the result to
-`kubectl`. Edit resource requests, limits, probes, and volume mounts directly
-in the YAML files rather than inside shell code.
+The SUM endpoint accepts plaintext only for this trusted performance demo.
+Both HE services encrypt before evaluation. Pandas is the unencrypted baseline.
 
-For example, changing these values in `config/he-lab.env` updates every deploy
-and benchmark command:
+### Generic encrypted API benchmark
+
+```text
+scripts/benchmark/run-he-bench.sh
+  -> Kubernetes benchmark Job
+  -> scripts/benchmark/service_benchmark.py
+  -> encrypt in trusted client
+  -> POST /v1/evaluate
+  -> decrypt and compare in trusted client
+```
+
+The trusted client keeps the secret key. The evaluator receives serialized
+ciphertexts plus only the public/evaluation keys required by the operation.
+For both `cpu` and `gpu`, the benchmark Job uses `HE_BENCH_CLIENT_IMAGE`
+(normally the CPU image) as the trusted OpenFHE-Python client. Selecting `gpu`
+changes the target evaluator Service; it does not request a GPU for the client
+Job.
+
+Both benchmark paths generate their own deterministic input. You do not need
+to run `prepare-he-bench-data.sh` for these synthetic performance tests; that
+script is reserved for later benchmarks using the real installments dataset.
+
+Supported benchmark workloads:
+
+| Workload | Operations | Result meaning |
+| --- | --- | --- |
+| `primitive` | `add`, `subtract`, `multiply` | Checks the three basic HE operations |
+| `sum` | encrypted packed SUM | Checks reduction and rotation keys |
+| `variance` | population variance | Checks square, SUM, mean, and CKKS accuracy per chunk |
+
+## One-time setup
+
+### 1. Configure the lab
+
+Edit `config/he-lab.env` once for the target server:
 
 ```sh
-: "${HE_NAMESPACE:=he-dev}"
-: "${HE_CPU_IMAGE_TAG:=cpu-latest}"
-: "${HE_GPU_IMAGE_TAG:=gpu-latest}"
-: "${HE_CPU_SERVICE:=he-evaluator}"
-: "${HE_GPU_SERVICE:=he-evaluator-gpu}"
+: "${HE_NAMESPACE:=datalake-he}"
+: "${HE_IMAGE_REPOSITORY:=hub.vtcc.vn:8989/dockerboi99/he_k8s}"
+: "${HE_CPU_IMAGE_TAG:=cpu-<short-commit-sha>}"
+: "${HE_GPU_IMAGE_TAG:=gpu-<short-commit-sha>}"
 ```
 
-An exported shell value still overrides the tracked default for one run:
+Use immutable commit tags on a caching registry mirror. Avoid `cpu-latest` and
+`gpu-latest` when the mirror can keep an old manifest.
 
-```sh
-HE_NAMESPACE=he-trial \
-  ./scripts/benchmark/deploy-cpu-service.sh
-```
-
-## 1. Deploy or refresh the CPU service
-
-Wait for the `k3s-demo-app` GitLab pipeline to publish the CPU `cpu-latest` image,
-then run:
+### 2. Deploy the services
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
-git pull --ff-only
+git pull --ff-only origin main
 
-./scripts/benchmark/deploy-cpu-service.sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh \
+  cpu-<cpu-build-short-sha>
+
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh \
+  gpu-<gpu-build-short-sha>
 ```
 
-Check the service:
+Check both deployments before benchmarking:
 
 ```sh
-kubectl -n he-dev get deployment,pods,service -o wide
-kubectl -n he-dev get service he-evaluator
+kubectl -n datalake-he get deployment,pod,service -o wide
+kubectl -n datalake-he rollout status deployment/he-evaluator-cpu --timeout=10m
+kubectl -n datalake-he rollout status deployment/he-evaluator-gpu --timeout=15m
 ```
 
-## 2. Recommended: run Python directly against the existing CPU service
-
-Install OpenFHE-Python once in a server-side virtual environment:
+## Recommended first run: compare SUM at 50k
 
 ```sh
-python3 -m venv .venv-he-bench
-. .venv-he-bench/bin/activate
-python -m pip install --upgrade pip
-python -m pip install openfhe
+HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
+  --sizes 50000 \
+  --min-value 0 \
+  --max-value 100 \
+  --repetitions 1
 ```
 
-In terminal 1, expose the existing ClusterIP Service only to the local server:
+This single Job generates deterministic data and calls Pandas, CPU, and GPU.
+Wait for the command to print the result table and output directory.
+
+## Full SUM comparison
+
+Run this only after the 50k test passes:
 
 ```sh
-kubectl -n he-dev port-forward service/he-evaluator 18080:8080
+HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
+  --sizes 50000 100000 500000 1000000 \
+  --min-value 0 \
+  --max-value 100 \
+  --seed 42 \
+  --repetitions 3 \
+  --timeout 3600
 ```
 
-In terminal 2, activate the same environment and run the client directly:
+The SUM comparison currently accepts up to 1,000,000 values.
 
-```sh
-. .venv-he-bench/bin/activate
+## Test individual encrypted workloads
 
-python scripts/benchmark/service_benchmark.py \
-  --url http://127.0.0.1:18080/v1/evaluate \
-  --workload primitive \
-  --value-count 50000 \
-  --batch-size 8192 \
-  --repetitions 1 \
-  --timeout 300
-
-python scripts/benchmark/service_benchmark.py \
-  --url http://127.0.0.1:18080/v1/evaluate \
-  --workload sum \
-  --value-count 50000
-
-python scripts/benchmark/service_benchmark.py \
-  --url http://127.0.0.1:18080/v1/evaluate \
-  --workload variance \
-  --value-count 50000
-```
-
-`primitive` runs `add`, `subtract`, and `multiply`. This path creates no new
-Kubernetes Job or ConfigMap. Stop the port-forward with `Ctrl-C` when finished.
-
-## 3. Optional: create and run a benchmark Job
-
-Primitive runs test `add`, `subtract`, and `multiply`:
-
-```sh
-./scripts/benchmark/run-he-bench.sh cpu primitive 50000
-```
-
-SUM runs test encrypted packed `sum`:
-
-```sh
-./scripts/benchmark/run-he-bench.sh cpu sum 50000
-```
-
-Population variance runs `E[x²] - E[x]²` and compares each encrypted CKKS
-chunk with the matching Python variance:
-
-```sh
-./scripts/benchmark/run-he-bench.sh cpu variance 50000
-```
-
-The command creates the benchmark code ConfigMap, creates a Kubernetes Job,
-waits for completion, and copies the Job log to a JSON file under
-`benchmark_runs/`.
-
-## GPU: deploy and run the same benchmark
-
-First run the manual `build-fides-evaluator-gpu` GitLab job. After the
-`dockerboi99/he_k8s:gpu-latest` image is pushed and the K3s NVIDIA device plugin is
-working, confirm that `hht-k8s-staging-22` is schedulable and has the
-`dedicated=T4:NoSchedule` toleration declared in `k8s/gpu-evaluator.yaml`:
-
-```sh
-kubectl get nodes \
-  -o custom-columns='NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu'
-
-./scripts/benchmark/deploy-gpu-service.sh
-kubectl -n he-dev rollout status deployment/he-evaluator-gpu --timeout=15m
-
-./scripts/benchmark/run-he-bench.sh gpu primitive 50000
-./scripts/benchmark/run-he-bench.sh gpu sum 50000
-./scripts/benchmark/run-he-bench.sh gpu variance 50000
-```
-
-The benchmark command does not create the evaluator. If it reports that
-`he-evaluator-gpu` is not found, run `deploy-gpu-service.sh` first. If the GPU
-Deployment stays Pending, inspect it with:
-
-```sh
-kubectl -n he-dev get pods -l app=he-evaluator-gpu
-kubectl -n he-dev describe pods -l app=he-evaluator-gpu
-```
-
-The benchmark Job is still the trusted standard OpenFHE-Python client. It sends
-the public key to FIDESlib because the GPU backend needs it to load evaluation
-keys, but it never sends the secret key. CPU and GPU remain separate images.
-
-## 4. Run one larger Job size
-
-Allowed sizes are `50000`, `100000`, `500000`, `1000000`, and `10000000`:
-
-```sh
-./scripts/benchmark/run-he-bench.sh cpu primitive 500000
-./scripts/benchmark/run-he-bench.sh cpu sum 500000
-./scripts/benchmark/run-he-bench.sh cpu variance 500000
-```
-
-## 5. Run the complete Job matrix
-
-Start this only after both 50k Jobs pass:
-
-```sh
-./scripts/benchmark/run-he-bench.sh cpu primitive all
-./scripts/benchmark/run-he-bench.sh cpu sum all
-./scripts/benchmark/run-he-bench.sh cpu variance all
-```
-
-## 6. Job repetitions and timeouts
-
-```sh
-REPETITIONS=5 \
-  ./scripts/benchmark/run-he-bench.sh cpu primitive 500000
-
-REPETITIONS=5 BENCH_JOB_TIMEOUT_SECONDS=43200 \
-  ./scripts/benchmark/run-he-bench.sh cpu sum 10000000
-```
-
-Optional overrides:
-
-```sh
-export BATCH_SIZE=8192
-export REQUEST_TIMEOUT_SECONDS=300
-export HE_NAMESPACE=he-dev
-export HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=false
-export HE_SERVICE_URL=http://he-evaluator:8080/v1/evaluate
-export BENCH_IMAGE=docker.io/dockerboi99/he_k8s:cpu-latest
-```
-
-These shell overrides take priority over `config/he-lab.env` for one run.
-Set the TLS option to `true` only when `kubectl` reports an `x509` error from a
-temporary lab certificate.
-
-## Measurements
-
-For every operation, the result JSON records:
-
-- matching plain-Python operation time;
-- trusted-client encryption time;
-- ciphertext serialization time;
-- HTTP/service round-trip time;
-- evaluator-reported evaluation time;
-- trusted-client decryption time;
-- total encrypted end-to-end time and slowdown versus Python;
-- throughput, chunk count, CKKS error, and PASS/FAIL.
-
-The secret key stays only in the trusted benchmark client—either the Job or the
-direct local Python process—and is never included in the HTTP request. Inputs
-are bounded deterministic values generated one CKKS chunk at a time, allowing
-the 10m test without loading 10m Python values into memory simultaneously. The
-evaluator is stateless and does not save keys, input ciphertexts, or result
-ciphertexts.
-
-For `variance`, a 50k-or-larger run measures and validates every CKKS chunk;
-it does not claim one global variance across all chunks. A global variance
-needs encrypted cross-chunk moment aggregation and remains separate work.
-
-## Ciphertext chaining and lifetime
-
-The existing API can be called repeatedly without redeploying it. A client can
-encrypt `12`, `7`, `8`, and `9` under one CKKS context/keypair, then chain:
+The syntax is:
 
 ```text
-ct12 + ct7  -> ct19
-ct19 + ct8  -> ct27
-ct27 + ct9  -> ct36
+./scripts/benchmark/run-he-bench.sh <cpu|gpu> \
+  <primitive|sum|variance> \
+  <50000|100000|500000|1000000|10000000|all>
 ```
 
-The client must keep the same crypto context and secret key in memory and keep
-each returned ciphertext for the next request. The service only evaluates one
-request and returns one serialized ciphertext; it does not currently assign
-ciphertext IDs or provide storage.
-
-`service_benchmark.py` uses temporary files only for OpenFHE serialization.
-Those files are automatically removed, and its keys/ciphertexts disappear when
-the Python process exits. Long-lived ciphertexts would need explicit client-side
-serialization. A secret key must go into protected secret storage, never Git or
-the GitOps data directory.
-
-## Results and troubleshooting
+Start with CPU at 50k:
 
 ```sh
-find benchmark_runs -maxdepth 3 -type f -print | sort
-cat benchmark_runs/service_primitive_*/50000.json
-
-kubectl -n he-dev get jobs,pods
-kubectl -n he-dev logs job/<job-name>
-kubectl -n he-dev describe job/<job-name>
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu primitive 50000
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu sum 50000
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu variance 50000
 ```
 
-GPU remains experimental until the FIDESlib image and remote ciphertext path
-pass on the target NVIDIA server.
+Then run the same checks against GPU:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu sum 50000
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu variance 50000
+```
+
+Run all configured sizes only after the 50k case passes:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu sum all
+HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu sum all
+```
+
+Useful one-run overrides:
+
+```sh
+REPETITIONS=3 BENCH_JOB_TIMEOUT_SECONDS=43200 \
+  HE_NAMESPACE=datalake-he \
+  ./scripts/benchmark/run-he-bench.sh gpu variance 500000
+```
+
+## Where results are saved
+
+SUM comparison:
+
+```text
+benchmark_runs/sum/<UTC-time>/summary.csv
+benchmark_runs/sum/<UTC-time>/result.json
+benchmark_runs/sum/<UTC-time>/job.log
+```
+
+Generic encrypted benchmark:
+
+```text
+benchmark_runs/cpu_<workload>_<UTC-time>/<size>.json
+benchmark_runs/cpu_<workload>_<UTC-time>/<size>.log
+benchmark_runs/gpu_<workload>_<UTC-time>/<size>.json
+benchmark_runs/gpu_<workload>_<UTC-time>/<size>.log
+```
+
+`benchmark_runs/` is ignored by Git.
+
+## How to read the SUM table
+
+| Field | Meaning |
+| --- | --- |
+| `backend` | `pandas`, `cpu`, or `gpu` |
+| `compute_seconds` | Plain Pandas SUM, or encrypted SUM plus encrypted chunk combination |
+| `end_to_end_seconds` | Full call including HE setup, encryption, evaluation, decryption, and transport |
+| `abs_error`, `rel_error` | Difference from `math.fsum` reference |
+| `accuracy_passed` | Whether the CKKS result is inside the configured tolerance |
+
+Use `compute_seconds` for the closest computation comparison. Use
+`end_to_end_seconds` to understand the latency a caller actually experiences.
+
+## Quick monitoring
+
+While a benchmark is running:
+
+```sh
+kubectl -n datalake-he get jobs,pods -w
+```
+
+Inspect a failed Job:
+
+```sh
+kubectl -n datalake-he get jobs,pods
+kubectl -n datalake-he logs job/<job-name> --all-containers=true
+kubectl -n datalake-he describe job/<job-name>
+```
+
+Check evaluator logs:
+
+```sh
+kubectl -n datalake-he logs deployment/he-evaluator-cpu --tail=200
+kubectl -n datalake-he logs deployment/he-evaluator-gpu --tail=200
+```
+
+## Common failures
+
+| Error | First check |
+| --- | --- |
+| `deployment ... not found` | Run the matching deploy script first |
+| `Connection refused` | Check Deployment readiness and Service endpoints |
+| `ImagePullBackOff` | Confirm the immutable tag exists in the mirror and the registry protocol is configured on every node |
+| GPU Pod `Pending` | Check GPU allocation, hostname selection, toleration, and `runtimeClassName: nvidia` |
+| HTTP 500 | Read evaluator logs; the benchmark Job log usually shows only the client-side failure |
+| Accuracy failure | Retry 50k with values in `0..100`, then inspect CKKS parameters and timing details |
+| Kubernetes `x509` error | Temporarily set `HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=true`; leave it `false` otherwise |
+
+For the detailed SUM trust model and timing fields, see
+[`sum-benchmark.md`](sum-benchmark.md). For deployment-only commands, see
+[`k3s-direct-deployment.md`](k3s-direct-deployment.md).
