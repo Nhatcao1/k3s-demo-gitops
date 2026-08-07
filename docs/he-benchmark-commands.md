@@ -1,94 +1,63 @@
-# HE benchmark: overall CPU and GPU guide
+# HE benchmark: Python vs CPU vs GPU
 
 This is the main benchmark guide. Start here.
 
-The server needs only `k3s-demo-gitops`, `kubectl`, and access to the container
-registry. OpenFHE-Python stays in the CPU image. FIDESlib and its patched
-OpenFHE stay in the separate GPU image.
-
-## Pick the benchmark you need
-
-| Goal | Command | What it compares |
-| --- | --- | --- |
-| Compare SUM performance | `scripts/benchmark/sum/run.sh` | Pandas vs CPU OpenFHE vs GPU FIDESlib |
-| Test one backend and operation | `scripts/benchmark/run-he-bench.sh` | Python reference vs encrypted `/v1/evaluate` |
-
-Use the SUM comparison first. It is the quickest way to confirm that both
-services produce an accurate result and to compare their latency.
-
-Neither command redeploys an evaluator. Both create a normal Kubernetes Job
-inside `HE_NAMESPACE`; no `kubectl port-forward`, server virtual environment,
-or local OpenFHE installation is required.
-
-## What code is called
-
-### SUM comparison
+The recommended runner sends the same deterministic values to:
 
 ```text
-scripts/benchmark/sum/run.sh
-  -> Kubernetes benchmark Job
-  -> scripts/benchmark/sum/compare_sum.py
-     -> Pandas plaintext SUM
-     -> CPU POST /v1/demo/sum
-     -> GPU POST /v1/demo/sum
+Python baseline
+CPU OpenFHE
+GPU FIDESlib
 ```
 
-CPU service flow in `k3s-demo-app`:
+It compares all currently exposed demo operations in one Kubernetes Job:
 
 ```text
-api/app.py
-  -> backends/openfhe_demo_sum.py
-  -> OpenFHE-Python: keygen -> encrypt -> EvalSum -> decrypt
+add  subtract  multiply  square  sum  mean  variance
 ```
 
-GPU service flow in `k3s-demo-app`:
+No `kubectl port-forward`, server virtual environment, or local OpenFHE
+installation is required. OpenFHE-Python stays in the CPU image. FIDESlib and
+its patched OpenFHE stay in the separate GPU image.
+
+## What the runner calls
 
 ```text
-gpu/api/app.py
-  -> /src/worker/build/he-gpu-demo
-  -> gpu/worker/src/demo_main.cpp
-  -> gpu/worker/src/fides_backend.cpp
-  -> FIDESlib: encrypt -> AccumulateSum -> decrypt
+scripts/benchmark/compare/run.sh
+  -> Kubernetes comparison Job
+  -> scripts/benchmark/compare/compare_operations.py
+     -> Python baseline
+     -> CPU Service
+     -> GPU Service
 ```
 
-The SUM endpoint accepts plaintext only for this trusted performance demo.
-Both HE services encrypt before evaluation. Pandas is the unencrypted baseline.
-
-### Generic encrypted API benchmark
+For `add`, `subtract`, `multiply`, `square`, `mean`, and `variance`:
 
 ```text
-scripts/benchmark/run-he-bench.sh
-  -> Kubernetes benchmark Job
-  -> scripts/benchmark/service_benchmark.py
-  -> encrypt in trusted client
-  -> POST /v1/evaluate
-  -> decrypt and compare in trusted client
+POST /v1/demo/evaluate
 ```
 
-The trusted client keeps the secret key. The evaluator receives serialized
-ciphertexts plus only the public/evaluation keys required by the operation.
-For both `cpu` and `gpu`, the benchmark Job uses `HE_BENCH_CLIENT_IMAGE`
-(normally the CPU image) as the trusted OpenFHE-Python client. Selecting `gpu`
-changes the target evaluator Service; it does not request a GPU for the client
-Job.
+The API accepts at most 4096 values per request, so the runner splits a larger
+dataset into identical chunks for CPU and GPU and adds their timings.
 
-Both benchmark paths generate their own deterministic input. You do not need
-to run `prepare-he-bench-data.sh` for these synthetic performance tests; that
-script is reserved for later benchmarks using the real installments dataset.
+For SUM:
 
-Supported benchmark workloads:
+```text
+POST /v1/demo/sum
+```
 
-| Workload | Operations | Result meaning |
-| --- | --- | --- |
-| `primitive` | `add`, `subtract`, `multiply` | Checks the three basic HE operations |
-| `sum` | encrypted packed SUM | Checks reduction and rotation keys |
-| `variance` | population variance | Checks square, SUM, mean, and CKKS accuracy per chunk |
+SUM uses the dedicated large-vector path and produces one global encrypted SUM
+for up to 1,000,000 values.
+
+These are trusted benchmark endpoints: plaintext enters each service, but CPU
+and GPU both perform key generation, encryption, HE evaluation, and decryption
+inside their own backend. Python is the unencrypted reference.
 
 ## One-time setup
 
-### 1. Configure the lab
+### 1. Configure the target server
 
-Edit `config/he-lab.env` once for the target server:
+Edit `config/he-lab.env`:
 
 ```sh
 : "${HE_NAMESPACE:=datalake-he}"
@@ -97,10 +66,10 @@ Edit `config/he-lab.env` once for the target server:
 : "${HE_GPU_IMAGE_TAG:=gpu-<short-commit-sha>}"
 ```
 
-Use immutable commit tags on a caching registry mirror. Avoid `cpu-latest` and
-`gpu-latest` when the mirror can keep an old manifest.
+Use immutable commit tags on a caching registry mirror. Avoid moving
+`cpu-latest` and `gpu-latest` tags when the mirror may retain an old manifest.
 
-### 2. Deploy the services
+### 2. Deploy CPU and GPU
 
 ```sh
 cd ~/gitlab-k3s-lab/k3s-demo-gitops
@@ -113,7 +82,7 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh \
   gpu-<gpu-build-short-sha>
 ```
 
-Check both deployments before benchmarking:
+Check both services:
 
 ```sh
 kubectl -n datalake-he get deployment,pod,service -o wide
@@ -121,22 +90,89 @@ kubectl -n datalake-he rollout status deployment/he-evaluator-cpu --timeout=10m
 kubectl -n datalake-he rollout status deployment/he-evaluator-gpu --timeout=15m
 ```
 
-## Recommended first run: compare SUM at 50k
+## First run: all operations at 1,000 values
 
 ```sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
-  --sizes 50000 \
+HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
+  --operations all \
+  --sizes 1000 \
   --min-value 0 \
   --max-value 100 \
   --repetitions 1
 ```
 
-This single Job generates deterministic data and calls Pandas, CPU, and GPU.
-Wait for the command to print the result table and output directory.
+This produces one table containing Python, CPU, and GPU rows for every
+operation. Start here before using larger sizes.
 
-## Full SUM comparison
+## Compare selected operations
 
-Run this only after the 50k test passes:
+For the newly added GPU functions:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
+  --operations square mean variance \
+  --sizes 4096 \
+  --min-value 0 \
+  --max-value 100 \
+  --repetitions 1
+```
+
+For the primitive functions:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
+  --operations add subtract multiply \
+  --sizes 4096 \
+  --repetitions 1
+```
+
+For one operation at several sizes:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
+  --operations variance \
+  --sizes 1000 4096 50000 \
+  --repetitions 1 \
+  --timeout 3600
+```
+
+## Full comparison
+
+Run this only after the 1,000-value test passes. It can take a long time
+because every non-SUM block creates a real HE context and keypair.
+
+```sh
+HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
+  ./scripts/benchmark/compare/run.sh \
+  --operations all \
+  --sizes 4096 50000 100000 \
+  --min-value 0 \
+  --max-value 100 \
+  --seed 42 \
+  --repetitions 3 \
+  --timeout 3600
+```
+
+The runner accepts up to 1,000,000 values. Use larger sizes one operation at a
+time rather than starting a very large `all` run.
+
+## Important result scopes
+
+| Operation | Scope reported by the runner |
+| --- | --- |
+| `add`, `subtract`, `multiply`, `square` | All element-wise output values across all chunks |
+| `sum` | One global SUM across the full dataset |
+| `mean`, `variance` | One scalar result per 4096-value chunk |
+
+`mean` and `variance` are currently per-chunk for datasets larger than 4096.
+The runner does not pretend that plaintext combination of chunk results is a
+global HE reduction. A future large-vector backend endpoint must perform the
+encrypted cross-chunk combination before those rows can be labelled global.
+
+## Dedicated large SUM comparison
+
+The existing SUM runner remains useful because it has a more detailed timing
+breakdown and writes a Pandas baseline:
 
 ```sh
 HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
@@ -148,102 +184,65 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/sum/run.sh \
   --timeout 3600
 ```
 
-The SUM comparison currently accepts up to 1,000,000 values.
+See [`sum-benchmark.md`](sum-benchmark.md) for its detailed trust model and
+timing fields.
 
-## Test individual encrypted workloads
+## Optional encrypted API contract benchmark
 
-The syntax is:
-
-```text
-./scripts/benchmark/run-he-bench.sh <cpu|gpu> \
-  <primitive|sum|variance> \
-  <50000|100000|500000|1000000|10000000|all>
-```
-
-Start with CPU at 50k:
+`run-he-bench.sh` is still available when you need to test the serialized
+ciphertext `/v1/evaluate` contract. It compares one selected backend against a
+Python reference; it is not the main CPU-vs-GPU comparison runner.
 
 ```sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu primitive 50000
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu sum 50000
 HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu variance 50000
-```
-
-Then run the same checks against GPU:
-
-```sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu primitive 50000
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu sum 50000
 HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu variance 50000
 ```
 
-Run all configured sizes only after the 50k case passes:
+The trusted benchmark Job keeps the secret key. The evaluator receives only
+ciphertexts and the required public/evaluation keys.
 
-```sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh cpu sum all
-HE_NAMESPACE=datalake-he ./scripts/benchmark/run-he-bench.sh gpu sum all
-```
+## Results
 
-Useful one-run overrides:
-
-```sh
-REPETITIONS=3 BENCH_JOB_TIMEOUT_SECONDS=43200 \
-  HE_NAMESPACE=datalake-he \
-  ./scripts/benchmark/run-he-bench.sh gpu variance 500000
-```
-
-## Where results are saved
-
-SUM comparison:
+The unified comparison saves:
 
 ```text
-benchmark_runs/sum/<UTC-time>/summary.csv
-benchmark_runs/sum/<UTC-time>/result.json
-benchmark_runs/sum/<UTC-time>/job.log
-```
-
-Generic encrypted benchmark:
-
-```text
-benchmark_runs/cpu_<workload>_<UTC-time>/<size>.json
-benchmark_runs/cpu_<workload>_<UTC-time>/<size>.log
-benchmark_runs/gpu_<workload>_<UTC-time>/<size>.json
-benchmark_runs/gpu_<workload>_<UTC-time>/<size>.log
+benchmark_runs/compare/<UTC-time>/summary.csv
+benchmark_runs/compare/<UTC-time>/result.json
+benchmark_runs/compare/<UTC-time>/job.log
 ```
 
 `benchmark_runs/` is ignored by Git.
 
-## How to read the SUM table
+The terminal table contains:
 
 | Field | Meaning |
 | --- | --- |
-| `backend` | `pandas`, `cpu`, or `gpu` |
-| `compute_seconds` | Plain Pandas SUM, or encrypted SUM plus encrypted chunk combination |
-| `end_to_end_seconds` | Full call including HE setup, encryption, evaluation, decryption, and transport |
-| `abs_error`, `rel_error` | Difference from `math.fsum` reference |
-| `accuracy_passed` | Whether the CKKS result is inside the configured tolerance |
+| `operation` | HE function under test |
+| `backend` | `python`, `cpu`, or `gpu` |
+| `values` | Total input values processed |
+| `chunks` | Number of demo API requests, except global SUM |
+| `service_s` | Python compute time, or time reported inside the HE service |
+| `end_to_end_s` | Full client-observed HTTP time |
+| `abs_error` | Maximum difference from the Python reference |
+| `pass` | Whether absolute or relative error is inside tolerance |
 
-Use `compute_seconds` for the closest computation comparison. Use
-`end_to_end_seconds` to understand the latency a caller actually experiences.
+For SUM, `result.json` also records `he_compute_seconds` from encrypted SUM and
+encrypted partial-result combination. Other demo operations currently expose
+only total `evaluation_seconds`.
 
-## Quick monitoring
-
-While a benchmark is running:
+## Monitoring
 
 ```sh
 kubectl -n datalake-he get jobs,pods -w
 ```
 
-Inspect a failed Job:
+Inspect a failed comparison:
 
 ```sh
 kubectl -n datalake-he get jobs,pods
 kubectl -n datalake-he logs job/<job-name> --all-containers=true
 kubectl -n datalake-he describe job/<job-name>
-```
 
-Check evaluator logs:
-
-```sh
 kubectl -n datalake-he logs deployment/he-evaluator-cpu --tail=200
 kubectl -n datalake-he logs deployment/he-evaluator-gpu --tail=200
 ```
@@ -253,13 +252,13 @@ kubectl -n datalake-he logs deployment/he-evaluator-gpu --tail=200
 | Error | First check |
 | --- | --- |
 | `deployment ... not found` | Run the matching deploy script first |
+| Missing demo operation | Deploy CPU and GPU images built from the new app code |
 | `Connection refused` | Check Deployment readiness and Service endpoints |
-| `ImagePullBackOff` | Confirm the immutable tag exists in the mirror and the registry protocol is configured on every node |
-| GPU Pod `Pending` | Check GPU allocation, hostname selection, toleration, and `runtimeClassName: nvidia` |
-| HTTP 500 | Read evaluator logs; the benchmark Job log usually shows only the client-side failure |
-| Accuracy failure | Retry 50k with values in `0..100`, then inspect CKKS parameters and timing details |
-| Kubernetes `x509` error | Temporarily set `HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=true`; leave it `false` otherwise |
+| `ImagePullBackOff` | Confirm the immutable tag exists and registry protocol is configured on every node |
+| GPU Pod `Pending` | Check GPU allocation, hostname, toleration, and `runtimeClassName: nvidia` |
+| HTTP 500 | Read evaluator logs; the Job log generally shows only the client failure |
+| Accuracy failure | Retry 1,000 values in range `0..100`, then inspect CKKS parameters |
+| Kubernetes `x509` error | Temporarily set `HE_KUBECTL_INSECURE_SKIP_TLS_VERIFY=true` |
 
-For the detailed SUM trust model and timing fields, see
-[`sum-benchmark.md`](sum-benchmark.md). For deployment-only commands, see
+For deployment-only commands, see
 [`k3s-direct-deployment.md`](k3s-direct-deployment.md).

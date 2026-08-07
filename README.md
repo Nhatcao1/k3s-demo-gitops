@@ -75,10 +75,14 @@ The current goal, trust boundary, CPU/GPU split, benchmark meaning, and known
 SUM limitation are summarized in
 [docs/what-we-are-building.md](docs/what-we-are-building.md).
 
-Data preparation and the 50k, 100k, 500k, 1m, and 10m commands are in
-[docs/he-benchmark-commands.md](docs/he-benchmark-commands.md).
+The unified comparison runs Python, CPU, and GPU on the same values:
 
-CPU and GPU benchmarks run as Kubernetes Jobs, call their separate
-`/v1/evaluate` Services, and compare each HE operation with its Python
-baseline. The GPU path is implemented but remains experimental until it passes
-on the target NVIDIA server.
+```sh
+./scripts/benchmark/compare/run.sh --operations all --sizes 1000
+```
+
+Sizes, operation selection, output fields, and the separate encrypted-contract
+benchmark are documented in
+[docs/he-benchmark-commands.md](docs/he-benchmark-commands.md). The GPU path is
+implemented but remains experimental until it passes on the target NVIDIA
+server.

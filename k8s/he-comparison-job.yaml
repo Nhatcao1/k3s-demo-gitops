@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${HE_COMPARE_JOB_NAME}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-operation-comparison
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: ${HE_COMPARE_JOB_TIMEOUT_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-operation-comparison
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: comparison-client
+          image: ${HE_COMPARE_CLIENT_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - python
+            - -c
+            - |
+              import gzip
+              import os
+              from pathlib import Path
+              import subprocess
+              import sys
+
+              source = Path("/benchmark/compare_operations.py.gz")
+              target = Path("/tmp/compare_operations.py")
+              with gzip.open(source, "rb") as compressed:
+                  target.write_bytes(compressed.read())
+              arguments = Path("/benchmark/arguments.txt").read_text(
+                  encoding="utf-8"
+              ).splitlines()
+              command = [
+                  sys.executable,
+                  str(target),
+                  "--cpu-url",
+                  os.environ["HE_COMPARE_CPU_URL"],
+                  "--gpu-url",
+                  os.environ["HE_COMPARE_GPU_URL"],
+                  *arguments,
+              ]
+              raise SystemExit(subprocess.run(command, check=False).returncode)
+          env:
+            - name: HE_COMPARE_CPU_URL
+              value: ${HE_COMPARE_CPU_URL}
+            - name: HE_COMPARE_GPU_URL
+              value: ${HE_COMPARE_GPU_URL}
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: benchmark-code
+              mountPath: /benchmark
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: benchmark-code
+          configMap:
+            name: he-operation-comparison-code
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 4Gi
