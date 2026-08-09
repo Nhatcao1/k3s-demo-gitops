@@ -124,15 +124,17 @@ It records Python time, encryption time, serialization time, service
 round-trip time, evaluator time, decryption time, total HE time, slowdown,
 throughput, CKKS error, and PASS/FAIL.
 
-The test sizes are:
+One comparison Job can run several sizes, for example:
 
 ```text
 50k, 100k, 500k, 1m, 10m values
 ```
 
 Inputs are deterministic and processed in bounded service requests so CPU and
-GPU receive identical values. Generator range, float/integer type, seed, size,
-and repetitions are explicit benchmark options. The raw result contract is in
+GPU receive identical values. For now, CKKS inputs stay within
+`[-40000, 40000]` and use ten named profiles: positive/negative integers and
+positive/negative decimals with 1, 2, 3, or 6 decimal places. Profile, actual
+range, seed, size, and repetitions are recorded in every result. The raw result contract is in
 [`benchmark-data-contract.md`](benchmark-data-contract.md).
 
 ## Current SUM limitation
@@ -167,8 +169,9 @@ stabilized. Benchmark result files stay outside Git through
    CPU/GPU native demo endpoints on K3s.
 2. Add one small direct test command that runs the selected operation against
    an already deployed Service; deployment must remain a separate command.
-3. Benchmark `sum` first at 50k, 100k, 500k, and 1m, then extend the same
-   driver to the other six functions. Run 10m only after smaller sizes pass.
+3. Benchmark `sum` first at several sizes in one Job, initially using one data
+   profile. Then run all ten sign/precision profiles and extend the same driver
+   to the other six functions. Run 10m only after smaller sizes pass.
 4. Verify the real `/v1/evaluate` ciphertext path independently; a passing
    plaintext demo does not prove the secretless serialization path.
 5. Add `weighted_sum`, then `covariance`, one vertical slice at
