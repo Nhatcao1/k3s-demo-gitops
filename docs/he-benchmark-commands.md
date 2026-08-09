@@ -136,6 +136,29 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
   --timeout 3600
 ```
 
+## Chinese-reference input profile
+
+This matches the available reference point and value range, but not an exact
+reproduction because its distribution, seed, hardware, HE parameters, and
+latency boundary were not provided:
+
+```sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
+  --operations sum mean variance \
+  --sizes 50000 \
+  --min-value 1 \
+  --max-value 1000000 \
+  --value-type integer \
+  --seed 42 \
+  --repetitions 3 \
+  --timeout 3600
+```
+
+Do not compare `square` with the reference's sum-of-squares row; they are
+different operations. At 50k, only SUM currently has the same global result
+scope. `mean` and `variance` remain per 4096-value chunk and cannot yet be
+compared with the reference's global 50k latency.
+
 ## Full comparison
 
 Run this only after the 1,000-value test passes. It can take a long time
@@ -153,15 +176,34 @@ HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
   --timeout 3600
 ```
 
-The runner accepts up to 1,000,000 values. Use larger sizes one operation at a
-time rather than starting a very large `all` run.
+The runner accepts up to 10,000,000 values. Use 10 million only after smaller
+sizes pass and run one expensive operation at a time. Example GPU-scale SUM:
+
+```sh
+HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
+  ./scripts/benchmark/compare/run.sh \
+  --operations sum \
+  --sizes 50000 100000 500000 1000000 10000000 \
+  --sum-request-size 1000000 \
+  --min-value 0 \
+  --max-value 100 \
+  --value-type float \
+  --seed 42 \
+  --repetitions 3 \
+  --timeout 3600
+```
+
+Above one million values, SUM is split across demo requests and the returned
+partial plaintext scalars are combined by the trusted benchmark client. Such
+rows use `result_scope=global_scalar_client_combined`; they are not a fully
+encrypted cross-request aggregate.
 
 ## Important result scopes
 
 | Operation | Scope reported by the runner |
 | --- | --- |
 | `add`, `subtract`, `multiply`, `square` | All element-wise output values across all chunks |
-| `sum` | One global SUM across the full dataset |
+| `sum` | Global HE SUM through 1m; above 1m, global scalar combined by benchmark client |
 | `mean`, `variance` | One scalar result per 4096-value chunk |
 
 `mean` and `variance` are currently per-chunk for datasets larger than 4096.
@@ -213,6 +255,12 @@ benchmark_runs/compare/<UTC-time>/job.log
 
 `benchmark_runs/` is ignored by Git.
 
+The runner deliberately does not generate the final Markdown/PDF comparison
+table. `summary.csv` and `result.json` contain the evidence needed for that
+separate reporting step. See
+[`benchmark-data-contract.md`](benchmark-data-contract.md) for the exact data
+contract and the supplied Chinese 50k comparison scope.
+
 The terminal table contains:
 
 | Field | Meaning |
@@ -225,6 +273,10 @@ The terminal table contains:
 | `end_to_end_s` | Full client-observed HTTP time |
 | `abs_error` | Maximum difference from the Python reference |
 | `pass` | Whether absolute or relative error is inside tolerance |
+
+Each CSV row also records the configured input range, `float`/`integer` value
+type, seed, and generator source. Repeated measurements remain in
+`result.json`; summary latency is the median.
 
 For SUM, `result.json` also records `he_compute_seconds` from encrypted SUM and
 encrypted partial-result combination. Other demo operations currently expose

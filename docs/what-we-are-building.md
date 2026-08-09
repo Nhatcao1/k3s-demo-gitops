@@ -130,20 +130,22 @@ The test sizes are:
 50k, 100k, 500k, 1m, 10m values
 ```
 
-Inputs are deterministic and processed in CKKS-sized chunks so CPU and GPU
-can run comparable workloads without loading 10 million Python values
-at once.
+Inputs are deterministic and processed in bounded service requests so CPU and
+GPU receive identical values. Generator range, float/integer type, seed, size,
+and repetitions are explicit benchmark options. The raw result contract is in
+[`benchmark-data-contract.md`](benchmark-data-contract.md).
 
 ## Current SUM limitation
 
-For data larger than one ciphertext, the current benchmark calls encrypted
-`sum` for every chunk. It then decrypts each chunk result and combines those
-partial totals in the trusted client for verification.
+Within one `/v1/demo/sum` request (maximum one million values), the service
+encrypts CKKS chunks, evaluates each encrypted SUM, combines encrypted partial
+sums, and decrypts once. Above one million, the comparison runner sends
+multiple requests and combines their returned partial plaintext scalars in the
+trusted client. It labels that result `global_scalar_client_combined`.
 
-This is enough to measure the deployed SUM primitive over the full number of
-input values. It is not yet a fully encrypted end-to-end aggregate. That
-version must add the encrypted partial sums through the evaluator and perform
-only one final client decryption.
+This is enough to measure deployed SUM work across a 10-million-value input,
+but it is not fully encrypted aggregation across requests. That future path
+must combine result ciphertexts under one compatible context and decrypt once.
 
 ## Repository responsibilities
 

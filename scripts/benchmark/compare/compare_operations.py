@@ -120,6 +120,25 @@ def chunks(values: list[float], chunk_size: int) -> list[list[float]]:
     return [values[start : start + chunk_size] for start in range(0, len(values), chunk_size)]
 
 
+def generate_values(
+    random_source: random.Random,
+    count: int,
+    minimum: float,
+    maximum: float,
+    value_type: str,
+) -> list[float]:
+    if value_type == "integer":
+        integer_minimum = math.ceil(minimum)
+        integer_maximum = math.floor(maximum)
+        if integer_minimum > integer_maximum:
+            raise ValueError("integer value range contains no whole number")
+        return [
+            float(random_source.randint(integer_minimum, integer_maximum))
+            for _ in range(count)
+        ]
+    return [random_source.uniform(minimum, maximum) for _ in range(count)]
+
+
 def reference_chunks(
     operation: str,
     values_a: list[float],
@@ -193,27 +212,39 @@ def run_service_repetition(
     values_a: list[float],
     values_b: list[float],
     chunk_size: int,
+    sum_request_size: int,
     timeout: float,
 ) -> tuple[float, float, float | None, list[list[float]], list[dict[str, Any]]]:
     if operation == "sum":
-        response, round_trip = post_json(
-            endpoint(base_url, "/v1/demo/sum"),
-            {"values": values_a},
-            timeout,
-        )
-        timings = response.get("timings")
-        if not isinstance(timings, dict):
-            raise RuntimeError("SUM response has no timing breakdown")
-        service_seconds = float(timings.get("total_seconds", round_trip))
-        he_compute_seconds = float(timings.get("sum_seconds", 0.0)) + float(
-            timings.get("combine_seconds", 0.0)
-        )
+        partial_values: list[float] = []
+        responses: list[dict[str, Any]] = []
+        service_seconds = 0.0
+        round_trip_seconds = 0.0
+        he_compute_seconds = 0.0
+        for part in chunks(values_a, sum_request_size):
+            response, round_trip = post_json(
+                endpoint(base_url, "/v1/demo/sum"),
+                {"values": part},
+                timeout,
+            )
+            timings = response.get("timings")
+            if not isinstance(timings, dict):
+                raise RuntimeError("SUM response has no timing breakdown")
+            response_result = response_values(response)
+            if len(response_result) != 1:
+                raise RuntimeError("SUM response must contain one value")
+            partial_values.append(response_result[0])
+            service_seconds += float(timings.get("total_seconds", round_trip))
+            round_trip_seconds += round_trip
+            he_compute_seconds += float(timings.get("sum_seconds", 0.0))
+            he_compute_seconds += float(timings.get("combine_seconds", 0.0))
+            responses.append(response_metadata(response))
         return (
             service_seconds,
-            round_trip,
+            round_trip_seconds,
             he_compute_seconds,
-            [response_values(response)],
-            [response_metadata(response)],
+            [[math.fsum(partial_values)]],
+            responses,
         )
 
     observed: list[list[float]] = []
@@ -243,9 +274,15 @@ def median_optional(values: list[float | None]) -> float | None:
     return statistics.median(materialized) if materialized else None
 
 
-def result_scope(operation: str) -> str:
+def result_scope(
+    operation: str, value_count: int, sum_request_size: int
+) -> str:
     if operation == "sum":
-        return "global_scalar"
+        return (
+            "global_scalar"
+            if value_count <= sum_request_size
+            else "global_scalar_client_combined"
+        )
     if operation in {"mean", "variance"}:
         return "per_chunk_scalar"
     return "elementwise_vector"
@@ -268,8 +305,20 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
 
     random_source = random.Random(args.seed)
     maximum_size = max(args.sizes)
-    all_a = [random_source.uniform(args.min_value, args.max_value) for _ in range(maximum_size)]
-    all_b = [random_source.uniform(args.min_value, args.max_value) for _ in range(maximum_size)]
+    all_a = generate_values(
+        random_source,
+        maximum_size,
+        args.min_value,
+        args.max_value,
+        args.value_type,
+    )
+    all_b = generate_values(
+        random_source,
+        maximum_size,
+        args.min_value,
+        args.max_value,
+        args.value_type,
+    )
 
     summaries: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
@@ -280,7 +329,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         values_b = all_b[:size]
         for operation in operations:
             expected = reference_chunks(operation, values_a, values_b, args.chunk_size)
-            chunk_count = 1 if operation == "sum" else len(expected)
+            chunk_count = (
+                math.ceil(size / args.sum_request_size)
+                if operation == "sum"
+                else len(expected)
+            )
 
             python_times: list[float] = []
             for repetition in range(1, args.repetitions + 1):
@@ -310,7 +363,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     "backend": "python",
                     "value_count": size,
                     "chunks": chunk_count,
-                    "result_scope": result_scope(operation),
+                    "result_scope": result_scope(
+                        operation, size, args.sum_request_size
+                    ),
                     "repetitions": args.repetitions,
                     "service_seconds": python_median,
                     "he_compute_seconds": None,
@@ -319,6 +374,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     "maximum_absolute_error": 0.0,
                     "maximum_relative_error": 0.0,
                     "accuracy_passed": True,
+                    "input_min": args.min_value,
+                    "input_max": args.max_value,
+                    "input_value_type": args.value_type,
+                    "seed": args.seed,
+                    "source": "deterministic_uniform_generator",
                 }
             )
 
@@ -341,6 +401,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                             values_a,
                             values_b,
                             args.chunk_size,
+                            args.sum_request_size,
                             args.timeout,
                         )
                     )
@@ -377,7 +438,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         "backend": backend,
                         "value_count": size,
                         "chunks": chunk_count,
-                        "result_scope": result_scope(operation),
+                        "result_scope": result_scope(
+                            operation, size, args.sum_request_size
+                        ),
                         "repetitions": args.repetitions,
                         "service_seconds": statistics.median(service_times),
                         "he_compute_seconds": median_optional(he_compute_times),
@@ -386,6 +449,11 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         "maximum_absolute_error": maximum_absolute,
                         "maximum_relative_error": maximum_relative,
                         "accuracy_passed": passed,
+                        "input_min": args.min_value,
+                        "input_max": args.max_value,
+                        "input_value_type": args.value_type,
+                        "seed": args.seed,
+                        "source": "deterministic_uniform_generator",
                     }
                 )
 
@@ -405,7 +473,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
             "operations": operations,
             "sizes": sorted(set(args.sizes)),
             "chunk_size": args.chunk_size,
+            "sum_request_size": args.sum_request_size,
             "value_range": [args.min_value, args.max_value],
+            "value_type": args.value_type,
             "seed": args.seed,
             "repetitions": args.repetitions,
             "abs_tolerance": args.abs_tolerance,
@@ -427,18 +497,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--operations", nargs="+", default=["all"])
     parser.add_argument("--sizes", type=int, nargs="+", default=[4096])
     parser.add_argument("--chunk-size", type=int, default=4096)
+    parser.add_argument("--sum-request-size", type=int, default=1_000_000)
     parser.add_argument("--min-value", type=float, default=0.0)
     parser.add_argument("--max-value", type=float, default=100.0)
+    parser.add_argument("--value-type", choices=("float", "integer"), default="float")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=3600.0)
     parser.add_argument("--abs-tolerance", type=float, default=0.1)
     parser.add_argument("--rel-tolerance", type=float, default=1e-6)
     args = parser.parse_args()
-    if not args.sizes or min(args.sizes) < 1 or max(args.sizes) > 1_000_000:
-        parser.error("sizes must be between 1 and 1000000")
+    if not args.sizes or min(args.sizes) < 1 or max(args.sizes) > 10_000_000:
+        parser.error("sizes must be between 1 and 10000000")
     if not 1 <= args.chunk_size <= 4096:
         parser.error("--chunk-size must be between 1 and 4096")
+    if not 1 <= args.sum_request_size <= 1_000_000:
+        parser.error("--sum-request-size must be between 1 and 1000000")
     if args.min_value > args.max_value:
         parser.error("--min-value must be less than or equal to --max-value")
     if args.repetitions < 1:
