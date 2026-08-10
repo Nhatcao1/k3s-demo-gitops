@@ -47,6 +47,8 @@ echo "Using GPU image from configuration: $image"
 
 HE_GPU_IMAGE=$image
 export HE_NAMESPACE HE_GPU_IMAGE HE_GPU_DEPLOYMENT HE_GPU_SERVICE HE_SERVICE_PORT
+export HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY HE_GPU_LIMIT_CPU
+export HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
 
 he_kubectl get namespace "$namespace" >/dev/null 2>&1 || he_kubectl create namespace "$namespace"
 
