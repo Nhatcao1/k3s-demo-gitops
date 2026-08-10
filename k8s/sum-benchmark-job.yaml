@@ -76,11 +76,11 @@ spec:
               value: ${SUM_BENCH_GPU_URL}
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "${HE_SUM_BENCH_REQUEST_CPU}"
+              memory: ${HE_SUM_BENCH_REQUEST_MEMORY}
             limits:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "${HE_SUM_BENCH_LIMIT_CPU}"
+              memory: ${HE_SUM_BENCH_LIMIT_MEMORY}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -99,4 +99,4 @@ spec:
             name: he-sum-benchmark-code
         - name: temporary-files
           emptyDir:
-            sizeLimit: 4Gi
+            sizeLimit: ${HE_SUM_BENCH_TMP_STORAGE}

@@ -7,7 +7,7 @@ metadata:
     app: he-comparison-data
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 600
+  ttlSecondsAfterFinished: ${HE_COMPARE_JOB_TTL_SECONDS}
   activeDeadlineSeconds: ${HE_COMPARE_DATA_JOB_TIMEOUT_SECONDS}
   template:
     metadata:
@@ -51,11 +51,11 @@ spec:
               raise SystemExit(subprocess.run(command, check=False).returncode)
           resources:
             requests:
-              cpu: "250m"
-              memory: 256Mi
+              cpu: "${HE_COMPARE_DATA_REQUEST_CPU}"
+              memory: ${HE_COMPARE_DATA_REQUEST_MEMORY}
             limits:
-              cpu: "2"
-              memory: 1Gi
+              cpu: "${HE_COMPARE_DATA_LIMIT_CPU}"
+              memory: ${HE_COMPARE_DATA_LIMIT_MEMORY}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -79,4 +79,4 @@ spec:
             claimName: ${HE_COMPARE_DATA_PVC}
         - name: temporary-files
           emptyDir:
-            sizeLimit: 64Mi
+            sizeLimit: ${HE_COMPARE_DATA_TMP_STORAGE}

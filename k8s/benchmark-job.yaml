@@ -56,11 +56,11 @@ spec:
             - "${BENCH_REQUEST_TIMEOUT_SECONDS}"
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "${HE_BENCH_REQUEST_CPU}"
+              memory: ${HE_BENCH_REQUEST_MEMORY}
             limits:
-              cpu: "2"
-              memory: 4Gi
+              cpu: "${HE_BENCH_LIMIT_CPU}"
+              memory: ${HE_BENCH_LIMIT_MEMORY}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -79,4 +79,4 @@ spec:
             name: he-service-benchmark-code
         - name: temporary-files
           emptyDir:
-            sizeLimit: 2Gi
+            sizeLimit: ${HE_BENCH_TMP_STORAGE}

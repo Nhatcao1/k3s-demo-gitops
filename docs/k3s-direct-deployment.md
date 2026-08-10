@@ -25,10 +25,14 @@ The actual resources are in:
 k8s/cpu-evaluator.yaml
 k8s/gpu-evaluator.yaml
 k8s/benchmark-job.yaml
+k8s/sum-benchmark-job.yaml
+k8s/he-comparison-job.yaml
+k8s/he-comparison-data-job.yaml
 ```
 
-Edit probes and volumes in YAML. Keep the common CPU/GPU resource values in
-`config/he-lab.env` so the deployment scripts reuse the same settings.
+Edit probes and volume definitions in YAML. Keep evaluator resources,
+benchmark Job resources, temporary-storage sizes, and comparison PVC size in
+`config/he-lab.env` so every script renders the same server settings.
 
 ### Evaluator CPU, memory, and GPU limits
 
@@ -50,6 +54,11 @@ The defaults in `config/he-lab.env` are:
 Requests reserve scheduler capacity; limits cap container usage. Leave
 `HE_GPU_COUNT=1` unless one evaluator Pod is intentionally meant to own more
 than one GPU. Apply changes by rerunning the corresponding deploy script.
+
+Benchmark clients and the reusable-data source Job have separate resource
+groups: `HE_BENCH_*`, `HE_SUM_BENCH_*`, `HE_COMPARE_*`, and
+`HE_COMPARE_DATA_*`. Changing those values affects the next benchmark Job and
+does not restart either evaluator Deployment.
 
 ### Optional K3s TLS workaround
 

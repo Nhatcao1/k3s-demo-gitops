@@ -43,6 +43,16 @@ export HE_SERVICE_PORT
 export HE_CPU_REQUEST_CPU HE_CPU_REQUEST_MEMORY HE_CPU_LIMIT_CPU
 export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
 export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
+export HE_BENCH_REQUEST_CPU HE_BENCH_REQUEST_MEMORY HE_BENCH_LIMIT_CPU
+export HE_BENCH_LIMIT_MEMORY HE_BENCH_TMP_STORAGE
+export HE_SUM_BENCH_REQUEST_CPU HE_SUM_BENCH_REQUEST_MEMORY
+export HE_SUM_BENCH_LIMIT_CPU HE_SUM_BENCH_LIMIT_MEMORY
+export HE_SUM_BENCH_TMP_STORAGE
+export HE_COMPARE_REQUEST_CPU HE_COMPARE_REQUEST_MEMORY HE_COMPARE_LIMIT_CPU
+export HE_COMPARE_LIMIT_MEMORY HE_COMPARE_TMP_STORAGE
+export HE_COMPARE_DATA_REQUEST_CPU HE_COMPARE_DATA_REQUEST_MEMORY
+export HE_COMPARE_DATA_LIMIT_CPU HE_COMPARE_DATA_LIMIT_MEMORY
+export HE_COMPARE_DATA_TMP_STORAGE HE_COMPARE_JOB_TTL_SECONDS
 
 BENCH_JOB_NAME=he-bench-cpu-primitive-50000-validation
 BENCH_BACKEND=cpu
@@ -138,12 +148,18 @@ grep -q "image: $HE_FIDES_EXAMPLES_IMAGE" "$render_dir/fides-simple.yaml"
 grep -q '/usr/local/bin/fides-serial' "$render_dir/fides-serial.yaml"
 grep -q "image: $HE_FIDES_EXAMPLES_IMAGE" "$render_dir/fides-serial.yaml"
 grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
+grep -q "cpu: \"$HE_BENCH_LIMIT_CPU\"" "$render_dir/benchmark.yaml"
+grep -q "sizeLimit: $HE_BENCH_TMP_STORAGE" "$render_dir/benchmark.yaml"
 grep -q "name: $HE_COMPARE_JOB_NAME" "$render_dir/he-comparison.yaml"
-grep -q 'ttlSecondsAfterFinished: 600' "$render_dir/he-comparison.yaml"
+grep -q "ttlSecondsAfterFinished: $HE_COMPARE_JOB_TTL_SECONDS" "$render_dir/he-comparison.yaml"
+grep -q "memory: $HE_COMPARE_LIMIT_MEMORY" "$render_dir/he-comparison.yaml"
+grep -q "sizeLimit: $HE_COMPARE_TMP_STORAGE" "$render_dir/he-comparison.yaml"
 grep -q "name: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison-data-pvc.yaml"
 grep -q "storage: $HE_COMPARE_DATA_STORAGE" "$render_dir/he-comparison-data-pvc.yaml"
 grep -q "name: $HE_COMPARE_DATA_JOB_NAME" "$render_dir/he-comparison-data-job.yaml"
-grep -q 'ttlSecondsAfterFinished: 600' "$render_dir/he-comparison-data-job.yaml"
+grep -q "ttlSecondsAfterFinished: $HE_COMPARE_JOB_TTL_SECONDS" "$render_dir/he-comparison-data-job.yaml"
+grep -q "memory: $HE_COMPARE_DATA_LIMIT_MEMORY" "$render_dir/he-comparison-data-job.yaml"
+grep -q "sizeLimit: $HE_COMPARE_DATA_TMP_STORAGE" "$render_dir/he-comparison-data-job.yaml"
 grep -q "claimName: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison-data-job.yaml"
 grep -q 'imagePullPolicy: IfNotPresent' "$render_dir/he-comparison-data-job.yaml"
 grep -q "image: $HE_COMPARE_CLIENT_IMAGE" "$render_dir/he-comparison.yaml"
@@ -153,6 +169,8 @@ grep -q "value: $HE_COMPARE_CPU_URL" "$render_dir/he-comparison.yaml"
 grep -q "value: $HE_COMPARE_GPU_URL" "$render_dir/he-comparison.yaml"
 grep -q "name: $SUM_BENCH_JOB_NAME" "$render_dir/sum-benchmark.yaml"
 grep -q "image: $SUM_BENCH_CLIENT_IMAGE" "$render_dir/sum-benchmark.yaml"
+grep -q "memory: $HE_SUM_BENCH_LIMIT_MEMORY" "$render_dir/sum-benchmark.yaml"
+grep -q "sizeLimit: $HE_SUM_BENCH_TMP_STORAGE" "$render_dir/sum-benchmark.yaml"
 grep -q "value: $SUM_BENCH_CPU_URL" "$render_dir/sum-benchmark.yaml"
 grep -q "value: $SUM_BENCH_GPU_URL" "$render_dir/sum-benchmark.yaml"
 grep -q 'name: he-dev' "$render_dir/argocd.yaml"

@@ -35,6 +35,24 @@ There is no extra shared encryptor Pod. The response reports encryption time
 separately, while `calculation_seconds` remains the main operation-performance
 measurement.
 
+### Configure benchmark Job resources
+
+All evaluator and benchmark resource defaults are in `config/he-lab.env`.
+The benchmark-side groups are:
+
+```text
+HE_BENCH_*          generic primitive benchmark client
+HE_SUM_BENCH_*      legacy SUM comparison client
+HE_COMPARE_*        CPU/GPU/Python comparison client
+HE_COMPARE_DATA_*   reusable CSV data-generator Job and PVC
+```
+
+Each Job group has CPU/memory requests and limits plus a temporary-storage
+size. `HE_COMPARE_DATA_STORAGE` controls the persistent CSV PVC, and
+`HE_COMPARE_JOB_TTL_SECONDS` controls cleanup of completed comparison/data
+Jobs. These settings change only the benchmark Pods; evaluator resources use
+`HE_CPU_*` and `HE_GPU_*`.
+
 ## 2. Prepare reusable data once
 
 This creates a persistent volume and streams CSV rows into it without keeping
@@ -62,7 +80,8 @@ and result files are captured; the PVC and CSV data are never deleted. Before
 a new run, finished Jobs from older script versions are removed so a
 ReadWriteOnce Ceph/RBD volume can detach from its previous node. A still-active
 Job blocks the new run instead of creating a second Pod that cannot mount the
-same volume. Kubernetes TTL cleanup is also set to ten minutes as a fallback.
+same volume. Kubernetes TTL cleanup defaults to ten minutes through
+`HE_COMPARE_JOB_TTL_SECONDS`.
 
 The standalone generator code is
 `scripts/benchmark/compare/generate_data.py`. It can also run outside K3s:
