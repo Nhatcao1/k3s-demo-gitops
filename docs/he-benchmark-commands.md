@@ -51,6 +51,13 @@ Use `--force` only when you intentionally want to regenerate them. If a later
 run needs two million values, prepare again with `--count 2000000`; every
 profile keeps stable deterministic prefixes for A and B.
 
+The preparation and comparison scripts delete their Job/Pod only after logs
+and result files are captured; the PVC and CSV data are never deleted. Before
+a new run, finished Jobs from older script versions are removed so a
+ReadWriteOnce Ceph/RBD volume can detach from its previous node. A still-active
+Job blocks the new run instead of creating a second Pod that cannot mount the
+same volume. Kubernetes TTL cleanup is also set to ten minutes as a fallback.
+
 The standalone generator code is
 `scripts/benchmark/compare/generate_data.py`. It can also run outside K3s:
 

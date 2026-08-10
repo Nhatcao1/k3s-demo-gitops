@@ -39,6 +39,11 @@ The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile
 or the maximum-sized arrays for the whole Job.
 
+Benchmark Jobs are removed after their logs/results are collected, while this
+PVC remains. Finished legacy Jobs are cleaned before a new run, active Jobs
+are treated as an exclusive-PVC conflict, and `ttlSecondsAfterFinished: 600`
+is the fallback when the launching shell disappears.
+
 ## Result files
 
 ```text

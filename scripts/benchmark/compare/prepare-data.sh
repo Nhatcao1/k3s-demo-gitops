@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 . "$repo_dir/config/he-lab.env"
 . "$repo_dir/scripts/lib/kubectl.sh"
+. "$repo_dir/scripts/lib/benchmark-jobs.sh"
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render the data preparation Job." >&2
@@ -24,7 +25,18 @@ job_template="$repo_dir/k8s/he-comparison-data-job.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
 
 temporary_dir=$(mktemp -d)
-trap 'rm -rf "$temporary_dir"' EXIT HUP INT TERM
+job_created=false
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$job_created" = "true" ]; then
+    he_delete_benchmark_job "$namespace" "job/$job_name" || true
+  fi
+  rm -rf "$temporary_dir"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
 arguments_file="$temporary_dir/arguments.txt"
 pvc_yaml="$temporary_dir/pvc.yaml"
 job_yaml="$temporary_dir/job.yaml"
@@ -56,6 +68,7 @@ he_kubectl apply -f "$pvc_yaml"
 he_kubectl -n "$namespace" wait \
   --for=jsonpath='{.status.phase}'=Bound "pvc/$HE_COMPARE_DATA_PVC" \
   --timeout=5m
+he_prepare_benchmark_pvc "$namespace"
 
 he_kubectl -n "$namespace" create configmap he-comparison-data-code \
   --from-file=data_profiles.py.gz="$temporary_dir/data_profiles.py.gz" \
@@ -66,6 +79,7 @@ he_kubectl -n "$namespace" create configmap he-comparison-data-code \
 
 he_kubectl -n "$namespace" delete "job/$job_name" --ignore-not-found >/dev/null
 he_kubectl create -f "$job_yaml"
+job_created=true
 if ! he_kubectl -n "$namespace" wait \
   --for=condition=complete "job/$job_name" --timeout="${job_timeout}s"; then
   he_kubectl -n "$namespace" logs "job/$job_name" --all-containers=true || true
@@ -73,4 +87,6 @@ if ! he_kubectl -n "$namespace" wait \
   exit 1
 fi
 he_kubectl -n "$namespace" logs "job/$job_name"
+he_delete_benchmark_job "$namespace" "job/$job_name"
+job_created=false
 echo "Reusable benchmark data is ready in PVC $namespace/$HE_COMPARE_DATA_PVC."

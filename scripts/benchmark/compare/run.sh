@@ -5,6 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 . "$repo_dir/config/he-lab.env"
 . "$repo_dir/scripts/lib/kubectl.sh"
+. "$repo_dir/scripts/lib/benchmark-jobs.sh"
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render the comparison Job." >&2
@@ -25,7 +26,18 @@ template="$repo_dir/k8s/he-comparison-job.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
 
 temporary_dir=$(mktemp -d)
-trap 'rm -rf "$temporary_dir"' EXIT HUP INT TERM
+job_created=false
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  if [ "$job_created" = "true" ]; then
+    he_delete_benchmark_job "$namespace" "job/$job_name" || true
+  fi
+  rm -rf "$temporary_dir"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
 arguments_file="$temporary_dir/arguments.txt"
 code_archive="$temporary_dir/compare_operations.py.gz"
 profiles_archive="$temporary_dir/data_profiles.py.gz"
@@ -51,6 +63,7 @@ he_kubectl -n "$namespace" get "pvc/$HE_COMPARE_DATA_PVC" >/dev/null || {
 he_kubectl -n "$namespace" wait \
   --for=jsonpath='{.status.phase}'=Bound "pvc/$HE_COMPARE_DATA_PVC" \
   --timeout=2m
+he_prepare_benchmark_pvc "$namespace"
 he_kubectl -n "$namespace" rollout status \
   "deployment/$HE_CPU_DEPLOYMENT" --timeout=2m
 he_kubectl -n "$namespace" rollout status \
@@ -90,6 +103,7 @@ python3 "$renderer" "$template" > "$rendered_job"
 he_kubectl -n "$namespace" delete "job/$job_name" \
   --ignore-not-found >/dev/null
 he_kubectl create -f "$rendered_job"
+job_created=true
 
 case "$job_timeout" in
   *[!0-9]*|""|0)
@@ -132,6 +146,8 @@ fi
 he_kubectl -n "$namespace" logs "job/$job_name" > "$job_log"
 sed -n '1,260p' "$job_log"
 python3 "$script_dir/extract_result.py" "$job_log" "$output_dir"
+he_delete_benchmark_job "$namespace" "job/$job_name"
+job_created=false
 
-echo "Kubernetes Job: $namespace/$job_name"
+echo "Completed Kubernetes Job (cleaned up): $namespace/$job_name"
 echo "Results: $output_dir"
