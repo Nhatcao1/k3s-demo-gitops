@@ -44,13 +44,13 @@ spec:
               value: "3600"
           resources:
             requests:
-              cpu: "2"
-              memory: 4Gi
-              nvidia.com/gpu: "1"
+              cpu: "${HE_GPU_REQUEST_CPU}"
+              memory: ${HE_GPU_REQUEST_MEMORY}
+              nvidia.com/gpu: "${HE_GPU_COUNT}"
             limits:
-              cpu: "8"
-              memory: 16Gi
-              nvidia.com/gpu: "1"
+              cpu: "${HE_GPU_LIMIT_CPU}"
+              memory: ${HE_GPU_LIMIT_MEMORY}
+              nvidia.com/gpu: "${HE_GPU_COUNT}"
           startupProbe:
             httpGet:
               path: /readyz

@@ -27,8 +27,29 @@ k8s/gpu-evaluator.yaml
 k8s/benchmark-job.yaml
 ```
 
-Edit resources, probes, and volumes in YAML. Do not put Kubernetes YAML back
-inside the shell scripts.
+Edit probes and volumes in YAML. Keep the common CPU/GPU resource values in
+`config/he-lab.env` so the deployment scripts reuse the same settings.
+
+### Evaluator CPU, memory, and GPU limits
+
+The defaults in `config/he-lab.env` are:
+
+```sh
+: "${HE_CPU_REQUEST_CPU:=1}"
+: "${HE_CPU_REQUEST_MEMORY:=2Gi}"
+: "${HE_CPU_LIMIT_CPU:=4}"
+: "${HE_CPU_LIMIT_MEMORY:=8Gi}"
+
+: "${HE_GPU_REQUEST_CPU:=2}"
+: "${HE_GPU_REQUEST_MEMORY:=4Gi}"
+: "${HE_GPU_LIMIT_CPU:=8}"
+: "${HE_GPU_LIMIT_MEMORY:=16Gi}"
+: "${HE_GPU_COUNT:=1}"
+```
+
+Requests reserve scheduler capacity; limits cap container usage. Leave
+`HE_GPU_COUNT=1` unless one evaluator Pod is intentionally meant to own more
+than one GPU. Apply changes by rerunning the corresponding deploy script.
 
 ### Optional K3s TLS workaround
 

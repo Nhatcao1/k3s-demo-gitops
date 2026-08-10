@@ -27,11 +27,11 @@ spec:
               value: "536870912"
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "${HE_CPU_REQUEST_CPU}"
+              memory: ${HE_CPU_REQUEST_MEMORY}
             limits:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "${HE_CPU_LIMIT_CPU}"
+              memory: ${HE_CPU_LIMIT_MEMORY}
 ---
 apiVersion: v1
 kind: Service

@@ -39,6 +39,9 @@ test -f "$repo_dir/scripts/benchmark/compare/extract_result.py"
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
 export HE_SERVICE_PORT
+export HE_CPU_REQUEST_CPU HE_CPU_REQUEST_MEMORY HE_CPU_LIMIT_CPU
+export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
+export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
 
 BENCH_JOB_NAME=he-bench-cpu-primitive-50000-validation
 BENCH_BACKEND=cpu
@@ -116,8 +119,13 @@ he_kubectl kustomize "$repo_dir/argocd" \
 
 grep -q "name: $HE_CPU_DEPLOYMENT" "$render_dir/cpu.yaml"
 grep -q "image: $HE_CPU_IMAGE" "$render_dir/cpu.yaml"
+grep -q "cpu: \"$HE_CPU_REQUEST_CPU\"" "$render_dir/cpu.yaml"
+grep -q "memory: $HE_CPU_LIMIT_MEMORY" "$render_dir/cpu.yaml"
 grep -q "name: $HE_GPU_DEPLOYMENT" "$render_dir/gpu.yaml"
 grep -q "image: $HE_GPU_IMAGE" "$render_dir/gpu.yaml"
+grep -q "cpu: \"$HE_GPU_LIMIT_CPU\"" "$render_dir/gpu.yaml"
+grep -q "memory: $HE_GPU_LIMIT_MEMORY" "$render_dir/gpu.yaml"
+grep -q "nvidia.com/gpu: \"$HE_GPU_COUNT\"" "$render_dir/gpu.yaml"
 grep -q 'nodeSelector:' "$render_dir/gpu.yaml"
 grep -q 'runtimeClassName: nvidia' "$render_dir/gpu.yaml"
 grep -q 'kubernetes.io/hostname: hht-k8s-staging-22' "$render_dir/gpu.yaml"
