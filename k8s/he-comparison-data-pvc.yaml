@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${HE_COMPARE_DATA_PVC}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-comparison-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: ${HE_COMPARE_DATA_STORAGE}

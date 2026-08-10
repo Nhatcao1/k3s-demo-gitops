@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
+import csv
 import json
 import math
-import random
+from pathlib import Path
 import statistics
 import time
 from typing import Any
@@ -14,24 +16,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+from data_profiles import DATA_PROFILES, INPUT_BOUND, expand_profiles
+
 
 OPERATIONS = ("add", "subtract", "multiply", "square", "sum", "mean", "variance")
 BINARY_OPERATIONS = {"add", "subtract", "multiply"}
 REDUCTION_OPERATIONS = {"sum", "mean", "variance"}
-MARKER = "HE_COMPARISON_RESULT="
-INPUT_BOUND = 40_000
-DATA_PROFILES: dict[str, tuple[str, int]] = {
-    "positive_integer": ("positive", 0),
-    "negative_integer": ("negative", 0),
-    "positive_decimal_1": ("positive", 1),
-    "negative_decimal_1": ("negative", 1),
-    "positive_decimal_2": ("positive", 2),
-    "negative_decimal_2": ("negative", 2),
-    "positive_decimal_3": ("positive", 3),
-    "negative_decimal_3": ("negative", 3),
-    "positive_decimal_6": ("positive", 6),
-    "negative_decimal_6": ("negative", 6),
-}
+CASE_MARKER = "HE_COMPARISON_CASE="
+RUN_MARKER = "HE_COMPARISON_RUN="
 
 
 def endpoint(base_url: str, path: str) -> str:
@@ -101,6 +93,14 @@ def check_capabilities(base_url: str, operations: list[str], timeout: float) -> 
         raise RuntimeError(f"{base_url} demo is missing operations: {', '.join(missing)}")
     if "sum" in operations and capabilities.get("demo_sum_endpoint") != "/v1/demo/sum":
         raise RuntimeError(f"{base_url} does not advertise /v1/demo/sum")
+    timing_fields = capabilities.get("demo_timing_fields")
+    required_timings = {"encrypt_seconds", "calculation_seconds"}
+    if not isinstance(timing_fields, list) or not required_timings.issubset(
+        timing_fields
+    ):
+        raise RuntimeError(
+            f"{base_url} image is missing demo encryption/calculation timings"
+        )
 
 
 def python_operation(
@@ -128,44 +128,42 @@ def python_operation(
     raise ValueError(f"unsupported operation: {operation}")
 
 
-def chunks(values: list[float], chunk_size: int) -> list[list[float]]:
-    return [values[start : start + chunk_size] for start in range(0, len(values), chunk_size)]
+def chunks(values: list[float], chunk_size: int) -> Iterator[list[float]]:
+    for start in range(0, len(values), chunk_size):
+        yield values[start : start + chunk_size]
 
 
-def generate_values(
-    random_source: random.Random,
-    count: int,
-    profile: str,
-) -> list[float]:
-    sign, decimal_places = DATA_PROFILES[profile]
-    multiplier = -1.0 if sign == "negative" else 1.0
-    if decimal_places == 0:
-        return [
-            multiplier * random_source.randint(1, INPUT_BOUND)
-            for _ in range(count)
-        ]
+def load_dataset(
+    data_dir: Path, profile: str, count: int
+) -> tuple[list[float], list[float], dict[str, Any]]:
+    metadata_path = data_dir / f"{profile}.json"
+    data_path = data_dir / f"{profile}.csv"
+    if not metadata_path.is_file() or not data_path.is_file():
+        raise RuntimeError(
+            f"missing reusable dataset for {profile}; run prepare-data.sh first"
+        )
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if metadata.get("profile") != profile or int(metadata.get("count", 0)) < count:
+        raise RuntimeError(f"dataset {profile} does not contain {count} pairs")
 
-    scale = 10**decimal_places
-    prefix_limit = 10 ** (decimal_places - 1)
-    values: list[float] = []
-    for _ in range(count):
-        whole = random_source.randrange(INPUT_BOUND)
-        fractional_prefix = random_source.randrange(prefix_limit)
-        fractional_last_digit = random_source.randint(1, 9)
-        fraction = fractional_prefix * 10 + fractional_last_digit
-        values.append(multiplier * (whole + fraction / scale))
-    return values
-
-
-def expand_profiles(requested: list[str]) -> list[str]:
-    if "all" in requested:
-        if requested != ["all"]:
-            raise ValueError("use --data-profiles all by itself")
-        return list(DATA_PROFILES)
-    invalid = sorted(set(requested) - set(DATA_PROFILES))
-    if invalid:
-        raise ValueError(f"invalid data profiles: {', '.join(invalid)}")
-    return list(dict.fromkeys(requested))
+    values_a: list[float] = []
+    values_b: list[float] = []
+    with data_path.open(newline="", encoding="utf-8") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != ["value_a", "value_b"]:
+            raise RuntimeError(f"dataset {data_path} has invalid columns")
+        for row in reader:
+            left = float(row["value_a"])
+            right = float(row["value_b"])
+            if not math.isfinite(left) or not math.isfinite(right):
+                raise RuntimeError(f"dataset {data_path} contains a non-finite value")
+            values_a.append(left)
+            values_b.append(right)
+            if len(values_a) == count:
+                break
+    if len(values_a) != count:
+        raise RuntimeError(f"dataset {data_path} ended before {count} pairs")
+    return values_a, values_b, metadata
 
 
 def input_metadata(
@@ -173,7 +171,7 @@ def input_metadata(
     operation: str,
     values_a: list[float],
     values_b: list[float],
-    seed: int,
+    dataset: dict[str, Any],
 ) -> dict[str, Any]:
     sign, decimal_places = DATA_PROFILES[profile]
     actual_minimum = min(values_a)
@@ -183,14 +181,18 @@ def input_metadata(
         actual_maximum = max(actual_maximum, max(values_b))
     return {
         "data_profile": profile,
+        "input_vector_count": 2 if operation in BINARY_OPERATIONS else 1,
+        "total_input_values": len(values_a)
+        * (2 if operation in BINARY_OPERATIONS else 1),
         "input_sign": sign,
         "decimal_places": decimal_places,
         "input_bound_min": -INPUT_BOUND,
         "input_bound_max": INPUT_BOUND,
         "input_min": actual_minimum,
         "input_max": actual_maximum,
-        "seed": seed,
-        "source": "deterministic_profile_generator",
+        "seed": dataset.get("seed"),
+        "source": dataset.get("source", "reusable_csv"),
+        "dataset_sha256": dataset.get("sha256"),
     }
 
 
@@ -250,6 +252,33 @@ def response_metadata(response: dict[str, Any]) -> dict[str, Any]:
     return {name: value for name, value in response.items() if name != "values"}
 
 
+def summed_timings(responses: list[dict[str, Any]]) -> dict[str, float]:
+    totals = {
+        "context_keygen_seconds": 0.0,
+        "encrypt_seconds": 0.0,
+        "calculation_seconds": 0.0,
+        "decrypt_seconds": 0.0,
+        "backend_total_seconds": 0.0,
+    }
+    for response in responses:
+        timings = response.get("timings")
+        if not isinstance(timings, dict):
+            raise RuntimeError("demo response has no timing breakdown")
+        calculation = timings.get("calculation_seconds")
+        if not isinstance(calculation, (int, float)):
+            calculation = float(timings.get("sum_seconds", 0.0)) + float(
+                timings.get("combine_seconds", 0.0)
+            )
+        totals["context_keygen_seconds"] += float(
+            timings.get("context_keygen_seconds", 0.0)
+        )
+        totals["encrypt_seconds"] += float(timings.get("encrypt_seconds", 0.0))
+        totals["calculation_seconds"] += float(calculation)
+        totals["decrypt_seconds"] += float(timings.get("decrypt_seconds", 0.0))
+        totals["backend_total_seconds"] += float(timings.get("total_seconds", 0.0))
+    return totals
+
+
 def run_python_repetition(
     operation: str,
     values_a: list[float],
@@ -273,7 +302,6 @@ def run_service_repetition(
     if operation == "sum":
         partial_values: list[float] = []
         responses: list[dict[str, Any]] = []
-        service_seconds = 0.0
         round_trip_seconds = 0.0
         he_compute_seconds = 0.0
         for part in chunks(values_a, sum_request_size):
@@ -289,13 +317,12 @@ def run_service_repetition(
             if len(response_result) != 1:
                 raise RuntimeError("SUM response must contain one value")
             partial_values.append(response_result[0])
-            service_seconds += float(timings.get("total_seconds", round_trip))
             round_trip_seconds += round_trip
             he_compute_seconds += float(timings.get("sum_seconds", 0.0))
             he_compute_seconds += float(timings.get("combine_seconds", 0.0))
             responses.append(response_metadata(response))
         return (
-            service_seconds,
+            he_compute_seconds,
             round_trip_seconds,
             he_compute_seconds,
             [[math.fsum(partial_values)]],
@@ -359,19 +386,30 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     check_capabilities(args.cpu_url, operations, args.timeout)
     check_capabilities(args.gpu_url, operations, args.timeout)
 
+    configuration = {
+        "operations": operations,
+        "sizes": sorted(set(args.sizes)),
+        "data_profiles": profiles,
+        "data_dir": str(args.data_dir),
+        "chunk_size": args.chunk_size,
+        "sum_request_size": args.sum_request_size,
+        "input_bound": [-INPUT_BOUND, INPUT_BOUND],
+        "repetitions": args.repetitions,
+        "abs_tolerance": args.abs_tolerance,
+        "rel_tolerance": args.rel_tolerance,
+    }
     summaries: list[dict[str, Any]] = []
-    details: list[dict[str, Any]] = []
     all_passed = True
-    maximum_size = max(args.sizes)
 
     for profile in profiles:
-        random_source = random.Random(f"{args.seed}:{profile}")
-        all_a = generate_values(random_source, maximum_size, profile)
-        all_b = generate_values(random_source, maximum_size, profile)
-
         for size in sorted(set(args.sizes)):
-            values_a = all_a[:size]
-            values_b = all_b[:size]
+            print(f"Loading {profile}: {size} pairs", flush=True)
+            values_a, values_b, dataset = load_dataset(
+                args.data_dir, profile, size
+            )
+            case_summaries: list[dict[str, Any]] = []
+            case_details: list[dict[str, Any]] = []
+
             for operation in operations:
                 expected = reference_chunks(
                     operation, values_a, values_b, args.chunk_size
@@ -382,7 +420,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     else len(expected)
                 )
                 metadata = input_metadata(
-                    profile, operation, values_a, values_b, args.seed
+                    profile, operation, values_a, values_b, dataset
                 )
 
                 python_times: list[float] = []
@@ -392,7 +430,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     )
                     absolute, relative = maximum_errors(observed, expected)
                     python_times.append(elapsed)
-                    details.append(
+                    case_details.append(
                         {
                             "operation": operation,
                             "backend": "python",
@@ -402,13 +440,18 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                             "service_seconds": elapsed,
                             "end_to_end_seconds": elapsed,
                             "he_compute_seconds": None,
+                            "context_keygen_seconds": None,
+                            "encrypt_seconds": None,
+                            "calculation_seconds": elapsed,
+                            "decrypt_seconds": None,
+                            "backend_total_seconds": elapsed,
                             "maximum_absolute_error": absolute,
                             "maximum_relative_error": relative,
                             **metadata,
                         }
                     )
                 python_median = statistics.median(python_times)
-                summaries.append(
+                case_summaries.append(
                     {
                         "operation": operation,
                         "backend": "python",
@@ -420,7 +463,15 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         "repetitions": args.repetitions,
                         "service_seconds": python_median,
                         "he_compute_seconds": None,
+                        "context_keygen_seconds": None,
+                        "encrypt_seconds": None,
+                        "calculation_seconds": python_median,
+                        "decrypt_seconds": None,
+                        "backend_total_seconds": python_median,
                         "end_to_end_seconds": python_median,
+                        "calculation_values_per_second": size
+                        / max(python_median, 1e-12),
+                        "encryption_values_per_second": None,
                         "values_per_second": size / max(python_median, 1e-12),
                         "maximum_absolute_error": 0.0,
                         "maximum_relative_error": 0.0,
@@ -436,6 +487,13 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     service_times: list[float] = []
                     round_trip_times: list[float] = []
                     he_compute_times: list[float | None] = []
+                    timing_runs: dict[str, list[float]] = {
+                        "context_keygen_seconds": [],
+                        "encrypt_seconds": [],
+                        "calculation_seconds": [],
+                        "decrypt_seconds": [],
+                        "backend_total_seconds": [],
+                    }
                     maximum_absolute = 0.0
                     maximum_relative = 0.0
                     for repetition in range(1, args.repetitions + 1):
@@ -461,7 +519,10 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         service_times.append(service)
                         round_trip_times.append(round_trip)
                         he_compute_times.append(he_compute)
-                        details.append(
+                        timing = summed_timings(responses)
+                        for name, value in timing.items():
+                            timing_runs[name].append(value)
+                        case_details.append(
                             {
                                 "operation": operation,
                                 "backend": backend,
@@ -471,9 +532,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                                 "service_seconds": service,
                                 "end_to_end_seconds": round_trip,
                                 "he_compute_seconds": he_compute,
+                                **timing,
                                 "maximum_absolute_error": absolute,
                                 "maximum_relative_error": relative,
-                                "service_responses": responses,
                                 **metadata,
                             }
                         )
@@ -483,7 +544,13 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     )
                     all_passed = all_passed and passed
                     median_round_trip = statistics.median(round_trip_times)
-                    summaries.append(
+                    median_calculation = statistics.median(
+                        timing_runs["calculation_seconds"]
+                    )
+                    median_encryption = statistics.median(
+                        timing_runs["encrypt_seconds"]
+                    )
+                    case_summaries.append(
                         {
                             "operation": operation,
                             "backend": backend,
@@ -495,7 +562,24 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                             "repetitions": args.repetitions,
                             "service_seconds": statistics.median(service_times),
                             "he_compute_seconds": median_optional(he_compute_times),
+                            "context_keygen_seconds": statistics.median(
+                                timing_runs["context_keygen_seconds"]
+                            ),
+                            "encrypt_seconds": median_encryption,
+                            "calculation_seconds": median_calculation,
+                            "decrypt_seconds": statistics.median(
+                                timing_runs["decrypt_seconds"]
+                            ),
+                            "backend_total_seconds": statistics.median(
+                                timing_runs["backend_total_seconds"]
+                            ),
                             "end_to_end_seconds": median_round_trip,
+                            "calculation_values_per_second": size
+                            / max(median_calculation, 1e-12),
+                            "encryption_values_per_second": metadata[
+                                "total_input_values"
+                            ]
+                            / max(median_encryption, 1e-12),
                             "values_per_second": size
                             / max(median_round_trip, 1e-12),
                             "maximum_absolute_error": maximum_absolute,
@@ -505,38 +589,47 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                         }
                     )
 
-    print(
-        "\noperation backend profile values chunks service_s "
-        "end_to_end_s abs_error pass"
-    )
-    for row in summaries:
-        print(
-            f"{row['operation']:<9} {row['backend']:<7} "
-            f"{row['data_profile']:<20} "
-            f"{row['value_count']:>7} {row['chunks']:>6} "
-            f"{row['service_seconds']:>9.4f} "
-            f"{row['end_to_end_seconds']:>12.4f} "
-            f"{row['maximum_absolute_error']:>9.3g} "
-            f"{str(row['accuracy_passed']):>5}"
-        )
+            print(
+                "\noperation backend profile values calculation_s "
+                "encrypt_s end_to_end_s abs_error pass"
+            )
+            for row in case_summaries:
+                encryption = row["encrypt_seconds"]
+                encryption_text = "-" if encryption is None else f"{encryption:.4f}"
+                print(
+                    f"{row['operation']:<9} {row['backend']:<7} "
+                    f"{row['data_profile']:<20} "
+                    f"{row['value_count']:>7} "
+                    f"{row['calculation_seconds']:>13.4f} "
+                    f"{encryption_text:>9} "
+                    f"{row['end_to_end_seconds']:>12.4f} "
+                    f"{row['maximum_absolute_error']:>9.3g} "
+                    f"{str(row['accuracy_passed']):>5}"
+                )
+            case_result = {
+                "data_profile": profile,
+                "value_count": size,
+                "summary": case_summaries,
+                "details": case_details,
+            }
+            print(
+                CASE_MARKER + json.dumps(case_result, separators=(",", ":")),
+                flush=True,
+            )
+            summaries.extend(case_summaries)
+            del values_a, values_b, case_summaries, case_details
 
-    result = {
-        "configuration": {
-            "operations": operations,
-            "sizes": sorted(set(args.sizes)),
-            "data_profiles": profiles,
-            "chunk_size": args.chunk_size,
-            "sum_request_size": args.sum_request_size,
-            "input_bound": [-INPUT_BOUND, INPUT_BOUND],
-            "seed": args.seed,
-            "repetitions": args.repetitions,
-            "abs_tolerance": args.abs_tolerance,
-            "rel_tolerance": args.rel_tolerance,
-        },
-        "summary": summaries,
-        "details": details,
-    }
-    print(MARKER + json.dumps(result, separators=(",", ":")))
+    print(
+        RUN_MARKER
+        + json.dumps(
+            {"configuration": configuration, "accuracy_passed": all_passed},
+            separators=(",", ":"),
+        )
+        + "\n",
+        end="",
+        flush=True,
+    )
+    result = {"configuration": configuration, "summary": summaries, "details": []}
     if not all_passed:
         raise SystemExit("CPU or GPU result exceeded the configured accuracy tolerance")
     return result
@@ -548,6 +641,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-url", default="http://he-evaluator-gpu:8080")
     parser.add_argument("--operations", nargs="+", default=["all"])
     parser.add_argument("--sizes", type=int, nargs="+", default=[4096])
+    parser.add_argument("--data-dir", type=Path, default=Path("/benchmark-data"))
     parser.add_argument(
         "--data-profiles",
         nargs="+",
@@ -556,7 +650,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--chunk-size", type=int, default=4096)
     parser.add_argument("--sum-request-size", type=int, default=1_000_000)
-    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=3600.0)
     parser.add_argument("--abs-tolerance", type=float, default=0.1)
@@ -568,6 +661,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--chunk-size must be between 1 and 4096")
     if not 1 <= args.sum_request_size <= 1_000_000:
         parser.error("--sum-request-size must be between 1 and 1000000")
+    if not args.data_dir.is_dir():
+        parser.error(f"--data-dir does not exist: {args.data_dir}")
     try:
         expand_profiles(args.data_profiles)
     except ValueError as error:

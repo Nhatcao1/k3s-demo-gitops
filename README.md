@@ -78,7 +78,11 @@ SUM limitation are summarized in
 The unified comparison runs Python, CPU, and GPU on the same values:
 
 ```sh
-./scripts/benchmark/compare/run.sh --operations all --sizes 1000
+./scripts/benchmark/compare/prepare-data.sh \
+  --count 10000 --data-profiles positive_decimal_3 --seed 42
+./scripts/benchmark/compare/run.sh \
+  --operations sum --sizes 5000 10000 \
+  --data-profiles positive_decimal_3
 ```
 
 Sizes, operation selection, output fields, and the separate encrypted-contract

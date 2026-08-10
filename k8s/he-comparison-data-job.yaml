@@ -1,17 +1,17 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ${HE_COMPARE_JOB_NAME}
+  name: ${HE_COMPARE_DATA_JOB_NAME}
   namespace: ${HE_NAMESPACE}
   labels:
-    app: he-operation-comparison
+    app: he-comparison-data
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: ${HE_COMPARE_JOB_TIMEOUT_SECONDS}
+  activeDeadlineSeconds: ${HE_COMPARE_DATA_JOB_TIMEOUT_SECONDS}
   template:
     metadata:
       labels:
-        app: he-operation-comparison
+        app: he-comparison-data
     spec:
       restartPolicy: Never
       securityContext:
@@ -20,51 +20,41 @@ spec:
         runAsGroup: 10001
         fsGroup: 10001
       containers:
-        - name: comparison-client
-          image: ${HE_COMPARE_CLIENT_IMAGE}
+        - name: data-generator
+          image: ${HE_COMPARE_DATA_IMAGE}
           imagePullPolicy: Always
           command:
             - python
             - -c
             - |
               import gzip
-              import os
               from pathlib import Path
               import subprocess
               import sys
 
-              for name in ("data_profiles.py", "compare_operations.py"):
-                  source = Path("/benchmark") / f"{name}.gz"
+              for name in ("data_profiles.py", "generate_data.py"):
+                  source = Path("/generator") / f"{name}.gz"
                   target = Path("/tmp") / name
                   with gzip.open(source, "rb") as compressed:
                       target.write_bytes(compressed.read())
-              arguments = Path("/benchmark/arguments.txt").read_text(
+              arguments = Path("/generator/arguments.txt").read_text(
                   encoding="utf-8"
               ).splitlines()
               command = [
                   sys.executable,
-                  "/tmp/compare_operations.py",
-                  "--cpu-url",
-                  os.environ["HE_COMPARE_CPU_URL"],
-                  "--gpu-url",
-                  os.environ["HE_COMPARE_GPU_URL"],
-                  "--data-dir",
+                  "/tmp/generate_data.py",
+                  "--output-dir",
                   "/benchmark-data",
                   *arguments,
               ]
               raise SystemExit(subprocess.run(command, check=False).returncode)
-          env:
-            - name: HE_COMPARE_CPU_URL
-              value: ${HE_COMPARE_CPU_URL}
-            - name: HE_COMPARE_GPU_URL
-              value: ${HE_COMPARE_GPU_URL}
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "250m"
+              memory: 256Mi
             limits:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "2"
+              memory: 1Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -72,21 +62,20 @@ spec:
                 - ALL
             readOnlyRootFilesystem: true
           volumeMounts:
-            - name: benchmark-code
-              mountPath: /benchmark
+            - name: generator-code
+              mountPath: /generator
               readOnly: true
-            - name: temporary-files
-              mountPath: /tmp
             - name: benchmark-data
               mountPath: /benchmark-data
-              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
       volumes:
-        - name: benchmark-code
+        - name: generator-code
           configMap:
-            name: he-operation-comparison-code
-        - name: temporary-files
-          emptyDir:
-            sizeLimit: 4Gi
+            name: he-comparison-data-code
         - name: benchmark-data
           persistentVolumeClaim:
             claimName: ${HE_COMPARE_DATA_PVC}
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 64Mi

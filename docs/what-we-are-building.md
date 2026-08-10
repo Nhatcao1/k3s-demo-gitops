@@ -130,8 +130,10 @@ One comparison Job can run several sizes, for example:
 50k, 100k, 500k, 1m, 10m values
 ```
 
-Inputs are deterministic and processed in bounded service requests so CPU and
-GPU receive identical values. For now, CKKS inputs stay within
+Inputs are generated once into reusable persistent CSV pairs, then processed
+one profile/size at a time in bounded service requests so CPU and GPU receive
+identical values without retaining the largest arrays for the whole Job. For
+now, CKKS inputs stay within
 `[-40000, 40000]` and use ten named profiles: positive/negative integers and
 positive/negative decimals with 1, 2, 3, or 6 decimal places. Profile, actual
 range, seed, size, and repetitions are recorded in every result. The raw result contract is in

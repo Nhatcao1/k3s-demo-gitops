@@ -22,13 +22,18 @@ for template in \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" \
   "$repo_dir/k8s/benchmark-job.yaml" \
+  "$repo_dir/k8s/he-comparison-data-pvc.yaml" \
+  "$repo_dir/k8s/he-comparison-data-job.yaml" \
   "$repo_dir/k8s/he-comparison-job.yaml" \
   "$repo_dir/k8s/sum-benchmark-job.yaml"; do
   test -f "$template"
 done
 test -f "$repo_dir/scripts/render-he-yaml.py"
 test -x "$repo_dir/scripts/benchmark/compare/run.sh"
+test -x "$repo_dir/scripts/benchmark/compare/prepare-data.sh"
 test -f "$repo_dir/scripts/benchmark/compare/compare_operations.py"
+test -f "$repo_dir/scripts/benchmark/compare/data_profiles.py"
+test -f "$repo_dir/scripts/benchmark/compare/generate_data.py"
 test -f "$repo_dir/scripts/benchmark/compare/extract_result.py"
 
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
@@ -62,8 +67,13 @@ HE_COMPARE_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
 HE_COMPARE_CPU_URL="http://${HE_CPU_SERVICE}:${HE_SERVICE_PORT}"
 HE_COMPARE_GPU_URL="http://${HE_GPU_SERVICE}:${HE_SERVICE_PORT}"
 HE_COMPARE_JOB_TIMEOUT_SECONDS=43200
+HE_COMPARE_DATA_JOB_NAME=he-comparison-data-validation
+HE_COMPARE_DATA_JOB_TIMEOUT_SECONDS=43200
+HE_COMPARE_DATA_IMAGE=$HE_BENCH_CLIENT_IMAGE
 export HE_COMPARE_JOB_NAME HE_COMPARE_CLIENT_IMAGE HE_COMPARE_CPU_URL
-export HE_COMPARE_GPU_URL HE_COMPARE_JOB_TIMEOUT_SECONDS
+export HE_COMPARE_GPU_URL HE_COMPARE_JOB_TIMEOUT_SECONDS HE_COMPARE_DATA_PVC
+export HE_COMPARE_DATA_STORAGE HE_COMPARE_DATA_JOB_NAME
+export HE_COMPARE_DATA_JOB_TIMEOUT_SECONDS HE_COMPARE_DATA_IMAGE
 
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/cpu-evaluator.yaml" > "$render_dir/cpu.yaml"
@@ -76,6 +86,10 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/benchmark-job.yaml" > "$render_dir/benchmark.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-comparison-data-pvc.yaml" > "$render_dir/he-comparison-data-pvc.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-comparison-data-job.yaml" > "$render_dir/he-comparison-data-job.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/he-comparison-job.yaml" > "$render_dir/he-comparison.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sum-benchmark-job.yaml" > "$render_dir/sum-benchmark.yaml"
@@ -86,6 +100,8 @@ for rendered in \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
   "$render_dir/benchmark.yaml" \
+  "$render_dir/he-comparison-data-pvc.yaml" \
+  "$render_dir/he-comparison-data-job.yaml" \
   "$render_dir/he-comparison.yaml" \
   "$render_dir/sum-benchmark.yaml"; do
   if grep -q '\${' "$rendered"; then
@@ -114,7 +130,12 @@ grep -q '/usr/local/bin/fides-serial' "$render_dir/fides-serial.yaml"
 grep -q "image: $HE_FIDES_EXAMPLES_IMAGE" "$render_dir/fides-serial.yaml"
 grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
 grep -q "name: $HE_COMPARE_JOB_NAME" "$render_dir/he-comparison.yaml"
+grep -q "name: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison-data-pvc.yaml"
+grep -q "storage: $HE_COMPARE_DATA_STORAGE" "$render_dir/he-comparison-data-pvc.yaml"
+grep -q "name: $HE_COMPARE_DATA_JOB_NAME" "$render_dir/he-comparison-data-job.yaml"
+grep -q "claimName: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison-data-job.yaml"
 grep -q "image: $HE_COMPARE_CLIENT_IMAGE" "$render_dir/he-comparison.yaml"
+grep -q "claimName: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison.yaml"
 grep -q "value: $HE_COMPARE_CPU_URL" "$render_dir/he-comparison.yaml"
 grep -q "value: $HE_COMPARE_GPU_URL" "$render_dir/he-comparison.yaml"
 grep -q "name: $SUM_BENCH_JOB_NAME" "$render_dir/sum-benchmark.yaml"

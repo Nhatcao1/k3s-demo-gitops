@@ -3,9 +3,9 @@
 The benchmark reuses the deployed CPU and GPU demo APIs. It does not rebuild
 OpenFHE or FIDESlib and it does not generate a final comparison report.
 
-One Kubernetes Job may run several input sizes and data profiles. It sends the
-same deterministic values to the Python baseline, CPU OpenFHE Service, and GPU
-FIDESlib Service.
+One Kubernetes Job may run several input sizes and data profiles. Reusable CSV
+pairs live on a persistent volume and are sent to the Python baseline, CPU
+OpenFHE Service, and GPU FIDESlib Service.
 
 ## Input bound and profiles
 
@@ -20,8 +20,13 @@ All generated values are real CKKS inputs within `[-40000, 40000]`.
 | `positive_decimal_3` / `negative_decimal_3` | Positive/negative values with 3 decimal places |
 | `positive_decimal_6` / `negative_decimal_6` | Positive/negative values with 6 decimal places |
 
-The generator is deterministic for the same profile and `--seed`. For binary
-operations it creates independent A and B vectors from the same profile.
+The streaming generator is deterministic for the same profile and seed. For
+binary operations it creates independent A and B vectors from the same
+profile. A matching file is reused across benchmark runs.
+
+The runner loads only the current profile/size, emits its result, releases its
+arrays, and then loads the next size. It never retains every requested profile
+or the maximum-sized arrays for the whole Job.
 
 ## Result files
 
@@ -40,16 +45,24 @@ main fields are:
 | `value_count` | Values, or value pairs for a binary operation |
 | `operation` | Demo operation tested |
 | `backend` | `python`, `cpu`, or `gpu` |
-| `service_seconds` | Python time or service-reported time |
+| `calculation_seconds` | Python or HE operation time; primary comparison |
+| `encrypt_seconds` | Backend encryption time, recorded separately |
+| `encryption_values_per_second` | Total plaintext inputs encrypted per second |
+| `context_keygen_seconds`, `decrypt_seconds` | Other HE lifecycle timings |
+| `backend_total_seconds` | Complete backend time |
+| `service_seconds` | Compatibility alias for calculation time |
 | `end_to_end_seconds` | Full client-observed HTTP time |
 | `values_per_second` | `value_count / end_to_end_seconds` |
 | `maximum_absolute_error`, `maximum_relative_error` | Error against Python |
 | `accuracy_passed` | Configured tolerance result |
 | `input_bound_min`, `input_bound_max` | Fixed generator bound |
 | `input_min`, `input_max` | Actual minimum and maximum in that test input |
-| `input_sign`, `decimal_places`, `seed`, `source` | Generator metadata |
+| `input_sign`, `decimal_places`, `seed`, `source`, `dataset_sha256` | Dataset metadata |
+| `input_vector_count`, `total_input_values` | Distinguishes unary values from binary value pairs |
 
-`result.json` also keeps every repetition and service timing response. The
+Each completed profile/size is emitted before the runner advances, so partial
+results can be extracted even if a later case fails. `result.json` also keeps
+every completed repetition. The
 external result collector may apply its own comparison rules, including any
 special handling for rows where `value_count=50000`.
 
