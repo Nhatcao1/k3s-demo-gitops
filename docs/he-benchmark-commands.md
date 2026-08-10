@@ -14,9 +14,15 @@ server OpenFHE installation is required.
 Set the image repository and immutable tags in `config/he-lab.env`, then run:
 
 ```sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh
-HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-cpu-service.sh cpu-<commit>
+HE_NAMESPACE=datalake-he ./scripts/benchmark/deploy-gpu-service.sh gpu-<commit>
 ```
+
+The data-preparation and comparison scripts never apply or restart evaluator
+Deployments. They read the exact live CPU/GPU image references and reject
+`cpu-latest`, `gpu-latest`, and plain `latest`. By default, the data generator
+and comparison client reuse the live immutable CPU image. An explicit
+`HE_COMPARE_DATA_IMAGE` or `HE_COMPARE_IMAGE` override must also be immutable.
 
 CPU and GPU use their own encryptors inside their existing demo Service:
 

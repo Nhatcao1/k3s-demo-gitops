@@ -1,5 +1,23 @@
 #!/bin/sh
 
+# Reject the known moving tags that previously returned stale registry-mirror
+# content. Immutable commit tags and sha256 digests are accepted.
+he_require_immutable_benchmark_image() {
+  benchmark_image=$1
+  benchmark_purpose=$2
+  case "$benchmark_image" in
+    ""|*[[:space:]]*)
+      echo "$benchmark_purpose image is empty or invalid." >&2
+      return 1
+      ;;
+    *:latest|*:cpu-latest|*:gpu-latest)
+      echo "$benchmark_purpose refuses moving image tag: $benchmark_image" >&2
+      echo "Deploy an immutable cpu-<commit> tag or provide an immutable override." >&2
+      return 1
+      ;;
+  esac
+}
+
 # Delete one benchmark Job and wait until its Pod no longer holds the RWO PVC.
 he_delete_benchmark_job() {
   benchmark_namespace=$1

@@ -69,19 +69,22 @@ he_kubectl -n "$namespace" rollout status \
 he_kubectl -n "$namespace" rollout status \
   "deployment/$HE_GPU_DEPLOYMENT" --timeout=2m
 
+cpu_evaluator_image=$(he_kubectl -n "$namespace" get \
+  "deployment/$HE_CPU_DEPLOYMENT" \
+  -o jsonpath='{.spec.template.spec.containers[0].image}')
+gpu_evaluator_image=$(he_kubectl -n "$namespace" get \
+  "deployment/$HE_GPU_DEPLOYMENT" \
+  -o jsonpath='{.spec.template.spec.containers[0].image}')
 if [ -n "$client_image_override" ]; then
   client_image=$client_image_override
 else
-  client_image=$(he_kubectl -n "$namespace" get \
-    "deployment/$HE_CPU_DEPLOYMENT" \
-    -o jsonpath='{.spec.template.spec.containers[0].image}')
+  client_image=$cpu_evaluator_image
 fi
-case "$client_image" in
-  ""|*[[:space:]]*)
-    echo "Could not determine one valid comparison client image." >&2
-    exit 1
-    ;;
-esac
+he_require_immutable_benchmark_image "$cpu_evaluator_image" "CPU evaluator"
+he_require_immutable_benchmark_image "$gpu_evaluator_image" "GPU evaluator"
+he_require_immutable_benchmark_image "$client_image" "Comparison client"
+echo "CPU evaluator image: $cpu_evaluator_image"
+echo "GPU evaluator image: $gpu_evaluator_image"
 echo "Comparison client image: $client_image"
 
 he_kubectl -n "$namespace" create configmap he-operation-comparison-code \

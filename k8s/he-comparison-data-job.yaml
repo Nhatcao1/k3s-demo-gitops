@@ -23,7 +23,7 @@ spec:
       containers:
         - name: data-generator
           image: ${HE_COMPARE_DATA_IMAGE}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command:
             - python
             - -c

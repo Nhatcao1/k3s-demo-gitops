@@ -54,6 +54,8 @@ if [ -z "$data_image" ]; then
     "deployment/$HE_CPU_DEPLOYMENT" \
     -o jsonpath='{.spec.template.spec.containers[0].image}')
 fi
+he_require_immutable_benchmark_image "$data_image" "Stress data generator"
+echo "Stress data generator image: $data_image"
 
 HE_COMPARE_DATA_JOB_NAME=$job_name
 HE_COMPARE_DATA_IMAGE=$data_image

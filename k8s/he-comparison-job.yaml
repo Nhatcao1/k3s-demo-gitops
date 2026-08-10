@@ -23,7 +23,7 @@ spec:
       containers:
         - name: comparison-client
           image: ${HE_COMPARE_CLIENT_IMAGE}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command:
             - python
             - -c
