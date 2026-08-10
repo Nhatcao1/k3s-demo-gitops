@@ -21,14 +21,19 @@ All generated values are real CKKS inputs within `[-40000, 40000]`.
 | `positive_decimal_6` / `negative_decimal_6` | Positive/negative values with 6 decimal places |
 | `sequential_positive_integer` | Exact `1..40000` sequence, repeated to the requested row count |
 | `sequential_negative_integer` | Exact `-1..-40000` sequence, repeated to the requested row count |
+| `sequential_positive_decimal_1` / `sequential_negative_decimal_1` | Upward integer sequence with 1 deterministic random fractional digit |
+| `sequential_positive_decimal_2` / `sequential_negative_decimal_2` | Upward integer sequence with 2 deterministic random fractional digits |
+| `sequential_positive_decimal_3` / `sequential_negative_decimal_3` | Upward integer sequence with 3 deterministic random fractional digits |
+| `sequential_positive_decimal_6` / `sequential_negative_decimal_6` | Upward integer sequence with 6 deterministic random fractional digits |
 
 The streaming generator is deterministic for the same profile and seed. For
 binary operations it creates independent A and B vectors from the same
 profile. A matching file is reused across benchmark runs.
 
 `--data-profiles all` continues to mean only the original ten random profiles.
-Use `--data-profiles stress` to generate the two sequential profiles. Both
-kinds of files coexist on the same PVC.
+Use `--data-profiles stress` to generate all sequential integer and decimal
+profiles. Both kinds of files coexist on the same PVC. Decimal A/B vectors use
+independent seeded fractional streams and remain reproducible.
 
 The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile

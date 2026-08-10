@@ -124,13 +124,22 @@ All profile values remain within `[-40000, 40000]`.
 
 ## 5. Deterministic limit stress run
 
-The stress profiles are separate from the existing random profiles. Each A
-and B vector repeats the exact bounded sequence instead of sampling values:
+The stress profiles are separate from the existing random profiles. Their
+integer part follows the exact bounded sequence; decimal profiles add
+deterministic seeded random digits after the decimal point:
 
 ```text
 sequential_positive_integer:  1, 2, ... 40000, 1, 2, ...
 sequential_negative_integer: -1,-2, ...-40000,-1,-2, ...
+sequential_*_decimal_1:        upward integer part + 1 random decimal digit
+sequential_*_decimal_2:        upward integer part + 2 random decimal digits
+sequential_*_decimal_3:        upward integer part + 3 random decimal digits
+sequential_*_decimal_6:        upward integer part + 6 random decimal digits
 ```
+
+A and B have independent fractional streams. They are repeatable for the same
+seed. The `40000` endpoint uses a zero fractional part to remain within the
+`[-40000, 40000]` input bound.
 
 Prepare one ten-million-row prefix on the same existing PVC. This does not
 delete or replace any random-profile CSV:
@@ -149,10 +158,13 @@ HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
 ./scripts/benchmark/compare/run.sh \
   --operations add \
   --sizes 5000000 6000000 7000000 8000000 9000000 10000000 \
-  --data-profiles sequential_positive_integer sequential_negative_integer \
+  --data-profiles stress \
   --repetitions 1 \
   --timeout 3600
 ```
+
+For a shorter decimal-only trial, replace `stress` with selected names such as
+`sequential_positive_decimal_3 sequential_negative_decimal_3`.
 
 Before every load or backend attempt, the runner writes a recoverable marker.
 Normal Python/HTTP exceptions become explicit failure records. If Kubernetes

@@ -14,6 +14,7 @@ sys.path.insert(0, str(COMPARE_DIR))
 
 from data_profiles import (  # noqa: E402
     RANDOM_DATA_PROFILES,
+    SEQUENTIAL_DATA_PROFILES,
     expand_profiles,
     values,
 )
@@ -38,7 +39,7 @@ class SequentialStressDataTests(unittest.TestCase):
         self.assertEqual(expand_profiles(["all"]), list(RANDOM_DATA_PROFILES))
         self.assertEqual(
             expand_profiles(["stress"]),
-            ["sequential_positive_integer", "sequential_negative_integer"],
+            list(SEQUENTIAL_DATA_PROFILES),
         )
 
     def test_generator_records_cyclic_sequence_metadata(self) -> None:
@@ -61,6 +62,34 @@ class SequentialStressDataTests(unittest.TestCase):
             self.assertEqual(rows[1], "1,1")
             self.assertEqual(rows[40_000], "40000,40000")
             self.assertEqual(rows[40_001], "1,1")
+
+    def test_decimal_stress_uses_seeded_fractional_digits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            metadata = generate_profile(
+                Path(directory),
+                "sequential_positive_decimal_6",
+                40_001,
+                42,
+                False,
+            )
+
+            self.assertEqual(
+                metadata["fraction_source"],
+                "deterministic_seeded_random_digits",
+            )
+            rows = (
+                Path(directory) / "sequential_positive_decimal_6.csv"
+            ).read_text(encoding="utf-8").splitlines()
+            first_a, first_b = rows[1].split(",")
+            self.assertTrue(first_a.startswith("1."))
+            self.assertTrue(first_b.startswith("1."))
+            self.assertEqual(len(first_a.split(".")[1]), 6)
+            self.assertEqual(len(first_b.split(".")[1]), 6)
+            self.assertNotEqual(first_a, first_b)
+            self.assertNotEqual(first_a[-1], "0")
+            self.assertNotEqual(first_b[-1], "0")
+            self.assertEqual(rows[40_000], "40000.000000,40000.000000")
+            self.assertTrue(rows[40_001].startswith("1."))
 
 
 class FailureExtractionTests(unittest.TestCase):

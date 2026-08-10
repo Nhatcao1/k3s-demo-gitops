@@ -95,6 +95,11 @@ def generate_profile(
     }
     if sequential:
         metadata["sequence_period"] = INPUT_BOUND
+        metadata["fraction_source"] = (
+            "none"
+            if decimal_places == 0
+            else "deterministic_seeded_random_digits"
+        )
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(f"Generated {output} ({count} pairs)", flush=True)
     return metadata
