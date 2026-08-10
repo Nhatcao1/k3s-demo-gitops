@@ -9,7 +9,13 @@ import hashlib
 import json
 from pathlib import Path
 
-from data_profiles import DATA_PROFILES, INPUT_BOUND, expand_profiles, values
+from data_profiles import (
+    DATA_PROFILES,
+    INPUT_BOUND,
+    SEQUENTIAL_DATA_PROFILES,
+    expand_profiles,
+    values,
+)
 
 
 FORMAT_VERSION = 1
@@ -68,6 +74,7 @@ def generate_profile(
     temporary.replace(output)
 
     sign, decimal_places = DATA_PROFILES[profile]
+    sequential = profile in SEQUENTIAL_DATA_PROFILES
     metadata: dict[str, object] = {
         "format_version": FORMAT_VERSION,
         "profile": profile,
@@ -80,8 +87,14 @@ def generate_profile(
         "input_min": actual_minimum,
         "input_max": actual_maximum,
         "sha256": file_sha256(output),
-        "source": "deterministic_reusable_csv",
+        "source": (
+            "deterministic_cyclic_sequence_csv"
+            if sequential
+            else "deterministic_reusable_csv"
+        ),
     }
+    if sequential:
+        metadata["sequence_period"] = INPUT_BOUND
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(f"Generated {output} ({count} pairs)", flush=True)
     return metadata

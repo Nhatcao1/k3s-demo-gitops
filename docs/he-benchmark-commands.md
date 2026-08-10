@@ -122,6 +122,45 @@ HE_NAMESPACE=datalake-he ./scripts/benchmark/compare/run.sh \
 
 All profile values remain within `[-40000, 40000]`.
 
+## 5. Deterministic limit stress run
+
+The stress profiles are separate from the existing random profiles. Each A
+and B vector repeats the exact bounded sequence instead of sampling values:
+
+```text
+sequential_positive_integer:  1, 2, ... 40000, 1, 2, ...
+sequential_negative_integer: -1,-2, ...-40000,-1,-2, ...
+```
+
+Prepare one ten-million-row prefix on the same existing PVC. This does not
+delete or replace any random-profile CSV:
+
+```sh
+HE_NAMESPACE=datalake-he \
+./scripts/benchmark/compare/prepare-data.sh \
+  --count 10000000 \
+  --data-profiles stress
+```
+
+Then increase ADD from five million to ten million rows in one Job:
+
+```sh
+HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
+./scripts/benchmark/compare/run.sh \
+  --operations add \
+  --sizes 5000000 6000000 7000000 8000000 9000000 10000000 \
+  --data-profiles sequential_positive_integer sequential_negative_integer \
+  --repetitions 1 \
+  --timeout 3600
+```
+
+Before every load or backend attempt, the runner writes a recoverable marker.
+Normal Python/HTTP exceptions become explicit failure records. If Kubernetes
+kills the process outright, such as `OOMKilled`, `run.sh` combines the last
+attempt marker with Pod termination details. Completed sizes remain in
+`summary.csv`; the first failed limit is written to `failures.csv` and
+`result.json`.
+
 ## Demo API paths
 
 The Job uses:
@@ -148,6 +187,7 @@ variance remain per 4096-value chunk.
 benchmark_runs/compare/<UTC-time>/summary.csv
 benchmark_runs/compare/<UTC-time>/result.json
 benchmark_runs/compare/<UTC-time>/job.log
+benchmark_runs/compare/<UTC-time>/failures.csv  # only when a limit is hit
 ```
 
 `summary.csv` has one row per profile, size, operation, and backend. Important

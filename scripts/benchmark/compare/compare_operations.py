@@ -24,6 +24,43 @@ BINARY_OPERATIONS = {"add", "subtract", "multiply"}
 REDUCTION_OPERATIONS = {"sum", "mean", "variance"}
 CASE_MARKER = "HE_COMPARISON_CASE="
 RUN_MARKER = "HE_COMPARISON_RUN="
+ATTEMPT_MARKER = "HE_COMPARISON_ATTEMPT="
+FAILURE_MARKER = "HE_COMPARISON_FAILURE="
+
+
+def emit_attempt(
+    profile: str,
+    size: int,
+    operation: str,
+    backend: str,
+    repetition: int | None = None,
+) -> dict[str, Any]:
+    attempt: dict[str, Any] = {
+        "data_profile": profile,
+        "value_count": size,
+        "operation": operation,
+        "backend": backend,
+    }
+    if repetition is not None:
+        attempt["repetition"] = repetition
+    print(
+        ATTEMPT_MARKER + json.dumps(attempt, separators=(",", ":")),
+        flush=True,
+    )
+    return attempt
+
+
+def emit_failure(attempt: dict[str, Any], error: Exception) -> None:
+    failure = {
+        **attempt,
+        "failure_type": "limit_or_runtime_failure",
+        "error_type": type(error).__name__,
+        "error_message": str(error)[:1000],
+    }
+    print(
+        FAILURE_MARKER + json.dumps(failure, separators=(",", ":")),
+        flush=True,
+    )
 
 
 def endpoint(base_url: str, path: str) -> str:
@@ -404,9 +441,14 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     for profile in profiles:
         for size in sorted(set(args.sizes)):
             print(f"Loading {profile}: {size} pairs", flush=True)
-            values_a, values_b, dataset = load_dataset(
-                args.data_dir, profile, size
-            )
+            attempt = emit_attempt(profile, size, "load", "runner")
+            try:
+                values_a, values_b, dataset = load_dataset(
+                    args.data_dir, profile, size
+                )
+            except Exception as error:
+                emit_failure(attempt, error)
+                raise
             case_summaries: list[dict[str, Any]] = []
             case_details: list[dict[str, Any]] = []
 
@@ -425,10 +467,17 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
 
                 python_times: list[float] = []
                 for repetition in range(1, args.repetitions + 1):
-                    elapsed, observed = run_python_repetition(
-                        operation, values_a, values_b, args.chunk_size
+                    attempt = emit_attempt(
+                        profile, size, operation, "python", repetition
                     )
-                    absolute, relative = maximum_errors(observed, expected)
+                    try:
+                        elapsed, observed = run_python_repetition(
+                            operation, values_a, values_b, args.chunk_size
+                        )
+                        absolute, relative = maximum_errors(observed, expected)
+                    except Exception as error:
+                        emit_failure(attempt, error)
+                        raise
                     python_times.append(elapsed)
                     case_details.append(
                         {
@@ -497,23 +546,30 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
                     maximum_absolute = 0.0
                     maximum_relative = 0.0
                     for repetition in range(1, args.repetitions + 1):
+                        attempt = emit_attempt(
+                            profile, size, operation, backend, repetition
+                        )
                         print(
                             f"{backend.upper()} {operation}: {profile}, "
                             f"{size} values, repetition {repetition}",
                             flush=True,
                         )
-                        service, round_trip, he_compute, observed, responses = (
-                            run_service_repetition(
-                                base_url,
-                                operation,
-                                values_a,
-                                values_b,
-                                args.chunk_size,
-                                args.sum_request_size,
-                                args.timeout,
+                        try:
+                            service, round_trip, he_compute, observed, responses = (
+                                run_service_repetition(
+                                    base_url,
+                                    operation,
+                                    values_a,
+                                    values_b,
+                                    args.chunk_size,
+                                    args.sum_request_size,
+                                    args.timeout,
+                                )
                             )
-                        )
-                        absolute, relative = maximum_errors(observed, expected)
+                            absolute, relative = maximum_errors(observed, expected)
+                        except Exception as error:
+                            emit_failure(attempt, error)
+                            raise
                         maximum_absolute = max(maximum_absolute, absolute)
                         maximum_relative = max(maximum_relative, relative)
                         service_times.append(service)
@@ -646,7 +702,10 @@ def parse_args() -> argparse.Namespace:
         "--data-profiles",
         nargs="+",
         default=["positive_decimal_3"],
-        help="named real-number profiles, or 'all' for all ten profiles",
+        help=(
+            "named real-number profiles, 'all' for the original ten profiles, "
+            "or 'stress' for sequential positive/negative integers"
+        ),
     )
     parser.add_argument("--chunk-size", type=int, default=4096)
     parser.add_argument("--sum-request-size", type=int, default=1_000_000)

@@ -118,6 +118,11 @@ job_log="$output_dir/job.log"
 if ! wait_for_job; then
   he_kubectl -n "$namespace" logs "job/$job_name" \
     --all-containers=true > "$job_log" 2>&1 || true
+  he_kubectl -n "$namespace" get pods -l "job-name=$job_name" \
+    -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,REASON:.status.containerStatuses[0].state.terminated.reason,EXIT:.status.containerStatuses[0].state.terminated.exitCode' \
+    >> "$job_log" 2>&1 || true
+  he_kubectl -n "$namespace" describe pods -l "job-name=$job_name" \
+    >> "$job_log" 2>&1 || true
   sed -n '1,260p' "$job_log" >&2
   python3 "$script_dir/extract_result.py" "$job_log" "$output_dir" || true
   he_kubectl -n "$namespace" describe "job/$job_name" || true

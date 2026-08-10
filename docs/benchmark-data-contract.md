@@ -19,10 +19,16 @@ All generated values are real CKKS inputs within `[-40000, 40000]`.
 | `positive_decimal_2` / `negative_decimal_2` | Positive/negative values with 2 decimal places |
 | `positive_decimal_3` / `negative_decimal_3` | Positive/negative values with 3 decimal places |
 | `positive_decimal_6` / `negative_decimal_6` | Positive/negative values with 6 decimal places |
+| `sequential_positive_integer` | Exact `1..40000` sequence, repeated to the requested row count |
+| `sequential_negative_integer` | Exact `-1..-40000` sequence, repeated to the requested row count |
 
 The streaming generator is deterministic for the same profile and seed. For
 binary operations it creates independent A and B vectors from the same
 profile. A matching file is reused across benchmark runs.
+
+`--data-profiles all` continues to mean only the original ten random profiles.
+Use `--data-profiles stress` to generate the two sequential profiles. Both
+kinds of files coexist on the same PVC.
 
 The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile
@@ -34,6 +40,7 @@ or the maximum-sized arrays for the whole Job.
 benchmark_runs/compare/<UTC-time>/summary.csv
 benchmark_runs/compare/<UTC-time>/result.json
 benchmark_runs/compare/<UTC-time>/job.log
+benchmark_runs/compare/<UTC-time>/failures.csv  # present after a failed limit
 ```
 
 `summary.csv` contains one row per profile, size, operation, and backend. Its
@@ -65,6 +72,12 @@ results can be extracted even if a later case fails. `result.json` also keeps
 every completed repetition. The
 external result collector may apply its own comparison rules, including any
 special handling for rows where `value_count=50000`.
+
+The runner also emits an attempt marker before each load and backend call. A
+catchable failure records its operation, backend, size, exception type, and
+message. For an uncatchable container termination, the extractor combines the
+last attempt with Kubernetes Pod status and records the interrupted size as a
+hard limit instead of silently losing it.
 
 ## Result scope
 
