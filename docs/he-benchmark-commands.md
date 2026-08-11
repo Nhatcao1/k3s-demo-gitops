@@ -156,22 +156,18 @@ All profile values remain within `[-40000, 40000]`.
 
 ## 5. Deterministic limit stress run
 
-The stress profiles are separate from the existing random profiles. Their
-integer part follows the exact bounded sequence; decimal profiles add
-deterministic seeded random digits after the decimal point:
+The `stress` group contains only two new integer profiles. It does not include
+the decimal profiles used by the regular `all` group:
 
 ```text
-sequential_positive_integer:  1, 2, ... 40000, 1, 2, ...
-sequential_negative_integer: -1,-2, ...-40000,-1,-2, ...
-sequential_*_decimal_1:        upward integer part + 1 random decimal digit
-sequential_*_decimal_2:        upward integer part + 2 random decimal digits
-sequential_*_decimal_3:        upward integer part + 3 random decimal digits
-sequential_*_decimal_6:        upward integer part + 6 random decimal digits
+stress_positive_integer_1b:  1, 2, 3, ... 1000000000, 1, ...
+stress_negative_integer_1b: -1,-2,-3, ...-1000000000,-1, ...
 ```
 
-A and B have independent fractional streams. They are repeatable for the same
-seed. The `40000` endpoint uses a zero fractional part to remain within the
-`[-40000, 40000]` input bound.
+These files are separate from every existing `[-40000, 40000]` random and
+sequential dataset on the PVC, so preparing them does not overwrite the older
+tests. The requested row count controls how far the sequence is materialized;
+for example, ten million rows contain `1..10000000` in each direction.
 
 Prepare one ten-million-row prefix on the same existing PVC. This does not
 delete or replace any random-profile CSV:
@@ -195,8 +191,10 @@ HE_NAMESPACE=datalake-he BENCH_JOB_TIMEOUT_SECONDS=43200 \
   --timeout 3600
 ```
 
-For a shorter decimal-only trial, replace `stress` with selected names such as
-`sequential_positive_decimal_3 sequential_negative_decimal_3`.
+The older bounded sequential profiles remain available by their explicit
+names, such as `sequential_positive_integer` or
+`sequential_positive_decimal_3`; they are no longer part of the `stress`
+shortcut.
 
 Before every load or backend attempt, the runner writes a recoverable marker.
 Normal Python/HTTP exceptions become explicit failure records. If Kubernetes

@@ -14,9 +14,13 @@ COMPARE_DIR = REPO_ROOT / "scripts" / "benchmark" / "compare"
 sys.path.insert(0, str(COMPARE_DIR))
 
 from data_profiles import (  # noqa: E402
+    DATA_PROFILES,
     RANDOM_DATA_PROFILES,
     SEQUENTIAL_DATA_PROFILES,
+    STRESS_DATA_PROFILES,
+    STRESS_INPUT_BOUND,
     expand_profiles,
+    profile_input_bound,
     values,
 )
 from generate_data import generate_profile  # noqa: E402
@@ -41,8 +45,53 @@ class SequentialStressDataTests(unittest.TestCase):
         self.assertEqual(expand_profiles(["all"]), list(RANDOM_DATA_PROFILES))
         self.assertEqual(
             expand_profiles(["stress"]),
-            list(SEQUENTIAL_DATA_PROFILES),
+            list(STRESS_DATA_PROFILES),
         )
+        self.assertIn("sequential_positive_integer", DATA_PROFILES)
+
+    def test_billion_stress_is_integer_only_and_keeps_old_bound(self) -> None:
+        self.assertEqual(
+            list(values("stress_positive_integer_1b", 3, 42, "a")),
+            [1.0, 2.0, 3.0],
+        )
+        self.assertEqual(
+            list(values("stress_negative_integer_1b", 3, 42, "b")),
+            [-1.0, -2.0, -3.0],
+        )
+        self.assertEqual(
+            profile_input_bound("stress_positive_integer_1b"),
+            STRESS_INPUT_BOUND,
+        )
+        self.assertEqual(profile_input_bound("positive_integer"), 40_000)
+
+    def test_billion_stress_writes_separate_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            metadata = generate_profile(
+                Path(directory),
+                "stress_positive_integer_1b",
+                3,
+                42,
+                False,
+            )
+
+            self.assertEqual(metadata["input_bound_max"], 1_000_000_000)
+            self.assertEqual(metadata["sequence_period"], 1_000_000_000)
+            self.assertTrue(
+                (Path(directory) / "stress_positive_integer_1b.csv").is_file()
+            )
+
+    def test_billion_stress_does_not_replace_bounded_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            generate_profile(root, "positive_integer", 3, 42, False)
+            bounded_path = root / "positive_integer.csv"
+            bounded_before = bounded_path.read_bytes()
+
+            for profile in expand_profiles(["stress"]):
+                generate_profile(root, profile, 3, 42, False)
+
+            self.assertEqual(bounded_path.read_bytes(), bounded_before)
+            self.assertEqual(len(expand_profiles(["stress"])), 2)
 
     def test_generator_records_cyclic_sequence_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -136,7 +136,9 @@ identical values without retaining the largest arrays for the whole Job. For
 now, CKKS inputs stay within
 `[-40000, 40000]` and use ten named profiles: positive/negative integers and
 positive/negative decimals with 1, 2, 3, or 6 decimal places. Profile, actual
-range, seed, size, and repetitions are recorded in every result. The raw result contract is in
+range, seed, size, and repetitions are recorded in every result. A separate
+two-profile integer stress group progresses toward positive/negative one
+billion without replacing those bounded datasets. The raw result contract is in
 [`benchmark-data-contract.md`](benchmark-data-contract.md).
 
 ## Current SUM limitation

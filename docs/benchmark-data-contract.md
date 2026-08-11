@@ -7,9 +7,11 @@ One Kubernetes Job may run several input sizes and data profiles. Reusable CSV
 pairs live on a persistent volume and are sent to the Python baseline, CPU
 OpenFHE Service, and GPU FIDESlib Service.
 
-## Input bound and profiles
+## Input bounds and profiles
 
-All generated values are real CKKS inputs within `[-40000, 40000]`.
+Regular and older sequential CKKS profiles stay within `[-40000, 40000]`.
+The two dedicated integer stress profiles can progress to one billion in each
+direction.
 
 | Profile | Values |
 | --- | --- |
@@ -25,15 +27,18 @@ All generated values are real CKKS inputs within `[-40000, 40000]`.
 | `sequential_positive_decimal_2` / `sequential_negative_decimal_2` | Upward integer sequence with 2 deterministic random fractional digits |
 | `sequential_positive_decimal_3` / `sequential_negative_decimal_3` | Upward integer sequence with 3 deterministic random fractional digits |
 | `sequential_positive_decimal_6` / `sequential_negative_decimal_6` | Upward integer sequence with 6 deterministic random fractional digits |
+| `stress_positive_integer_1b` | Exact positive integer sequence progressing from `1` to `1000000000` |
+| `stress_negative_integer_1b` | Exact negative integer sequence progressing from `-1` to `-1000000000` |
 
 The streaming generator is deterministic for the same profile and seed. For
 binary operations it creates independent A and B vectors from the same
 profile. A matching file is reused across benchmark runs.
 
 `--data-profiles all` continues to mean only the original ten random profiles.
-Use `--data-profiles stress` to generate all sequential integer and decimal
-profiles. Both kinds of files coexist on the same PVC. Decimal A/B vectors use
-independent seeded fractional streams and remain reproducible.
+`--data-profiles stress` selects only the two new billion-range integer
+profiles. The older bounded sequential profiles remain individually
+addressable. All files coexist on the same PVC under different names, so the
+new stress preparation does not replace existing data.
 
 The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile

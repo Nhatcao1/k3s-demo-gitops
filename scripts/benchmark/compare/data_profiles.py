@@ -8,6 +8,7 @@ from collections.abc import Iterator
 
 
 INPUT_BOUND = 40_000
+STRESS_INPUT_BOUND = 1_000_000_000
 RANDOM_DATA_PROFILES: dict[str, tuple[str, int]] = {
     "positive_integer": ("positive", 0),
     "negative_integer": ("negative", 0),
@@ -32,7 +33,19 @@ SEQUENTIAL_DATA_PROFILES: dict[str, tuple[str, int]] = {
     "sequential_positive_decimal_6": ("positive", 6),
     "sequential_negative_decimal_6": ("negative", 6),
 }
-DATA_PROFILES = {**RANDOM_DATA_PROFILES, **SEQUENTIAL_DATA_PROFILES}
+STRESS_DATA_PROFILES: dict[str, tuple[str, int]] = {
+    "stress_positive_integer_1b": ("positive", 0),
+    "stress_negative_integer_1b": ("negative", 0),
+}
+DATA_PROFILES = {
+    **RANDOM_DATA_PROFILES,
+    **SEQUENTIAL_DATA_PROFILES,
+    **STRESS_DATA_PROFILES,
+}
+
+
+def profile_input_bound(profile: str) -> int:
+    return STRESS_INPUT_BOUND if profile in STRESS_DATA_PROFILES else INPUT_BOUND
 
 
 def expand_profiles(requested: list[str]) -> list[str]:
@@ -43,7 +56,7 @@ def expand_profiles(requested: list[str]) -> list[str]:
     if "stress" in requested:
         if requested != ["stress"]:
             raise ValueError("use --data-profiles stress by itself")
-        return list(SEQUENTIAL_DATA_PROFILES)
+        return list(STRESS_DATA_PROFILES)
     invalid = sorted(set(requested) - set(DATA_PROFILES))
     if invalid:
         raise ValueError(f"invalid data profiles: {', '.join(invalid)}")
@@ -56,6 +69,10 @@ def values(profile: str, count: int, seed: int, vector: str) -> Iterator[float]:
         raise ValueError("vector must be a or b")
     sign, decimal_places = DATA_PROFILES[profile]
     multiplier = -1.0 if sign == "negative" else 1.0
+    if profile in STRESS_DATA_PROFILES:
+        for index in range(count):
+            yield multiplier * float(index % STRESS_INPUT_BOUND + 1)
+        return
     if profile in SEQUENTIAL_DATA_PROFILES:
         # The integer part follows the exact 1..40000 cycle. Decimal profiles
         # add deterministic seeded fractional digits; A and B use independent

@@ -16,7 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-from data_profiles import DATA_PROFILES, INPUT_BOUND, expand_profiles
+from data_profiles import DATA_PROFILES, expand_profiles, profile_input_bound
 
 
 OPERATIONS = ("add", "subtract", "multiply", "square", "sum", "mean", "variance")
@@ -223,8 +223,8 @@ def input_metadata(
         * (2 if operation in BINARY_OPERATIONS else 1),
         "input_sign": sign,
         "decimal_places": decimal_places,
-        "input_bound_min": -INPUT_BOUND,
-        "input_bound_max": INPUT_BOUND,
+        "input_bound_min": -profile_input_bound(profile),
+        "input_bound_max": profile_input_bound(profile),
         "input_min": actual_minimum,
         "input_max": actual_maximum,
         "seed": dataset.get("seed"),
@@ -417,6 +417,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     if invalid or "all" in operations:
         raise ValueError(f"invalid operations: {', '.join(invalid or operations)}")
     profiles = expand_profiles(args.data_profiles)
+    maximum_input_bound = max(
+        profile_input_bound(profile) for profile in profiles
+    )
 
     wait_ready(args.cpu_url, args.timeout)
     wait_ready(args.gpu_url, args.timeout)
@@ -430,7 +433,14 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "data_dir": str(args.data_dir),
         "chunk_size": args.chunk_size,
         "sum_request_size": args.sum_request_size,
-        "input_bound": [-INPUT_BOUND, INPUT_BOUND],
+        "input_bound": [-maximum_input_bound, maximum_input_bound],
+        "input_bounds_by_profile": {
+            profile: [
+                -profile_input_bound(profile),
+                profile_input_bound(profile),
+            ]
+            for profile in profiles
+        },
         "repetitions": args.repetitions,
         "abs_tolerance": args.abs_tolerance,
         "rel_tolerance": args.rel_tolerance,

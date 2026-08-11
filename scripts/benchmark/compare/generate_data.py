@@ -11,9 +11,10 @@ from pathlib import Path
 
 from data_profiles import (
     DATA_PROFILES,
-    INPUT_BOUND,
     SEQUENTIAL_DATA_PROFILES,
+    STRESS_DATA_PROFILES,
     expand_profiles,
+    profile_input_bound,
     values,
 )
 
@@ -74,7 +75,10 @@ def generate_profile(
     temporary.replace(output)
 
     sign, decimal_places = DATA_PROFILES[profile]
-    sequential = profile in SEQUENTIAL_DATA_PROFILES
+    input_bound = profile_input_bound(profile)
+    sequential = (
+        profile in SEQUENTIAL_DATA_PROFILES or profile in STRESS_DATA_PROFILES
+    )
     metadata: dict[str, object] = {
         "format_version": FORMAT_VERSION,
         "profile": profile,
@@ -82,8 +86,8 @@ def generate_profile(
         "seed": seed,
         "input_sign": sign,
         "decimal_places": decimal_places,
-        "input_bound_min": -INPUT_BOUND,
-        "input_bound_max": INPUT_BOUND,
+        "input_bound_min": -input_bound,
+        "input_bound_max": input_bound,
         "input_min": actual_minimum,
         "input_max": actual_maximum,
         "sha256": file_sha256(output),
@@ -94,7 +98,7 @@ def generate_profile(
         ),
     }
     if sequential:
-        metadata["sequence_period"] = INPUT_BOUND
+        metadata["sequence_period"] = input_bound
         metadata["fraction_source"] = (
             "none"
             if decimal_places == 0
