@@ -30,6 +30,55 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def write_metadata(path: Path, metadata: dict[str, object]) -> None:
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def extend_stress_profile(
+    output: Path,
+    metadata_path: Path,
+    profile: str,
+    count: int,
+    seed: int,
+    current: dict[str, object],
+) -> dict[str, object]:
+    previous_count = int(current["count"])
+    actual_minimum = float(current["input_min"])
+    actual_maximum = float(current["input_max"])
+    _, decimal_places = DATA_PROFILES[profile]
+    with output.open("a", newline="", encoding="utf-8") as target:
+        writer = csv.writer(target)
+        for left, right in zip(
+            values(profile, count, seed, "a", start_index=previous_count),
+            values(profile, count, seed, "b", start_index=previous_count),
+        ):
+            writer.writerow(
+                (
+                    f"{left:.{decimal_places}f}",
+                    f"{right:.{decimal_places}f}",
+                )
+            )
+            actual_minimum = min(actual_minimum, left, right)
+            actual_maximum = max(actual_maximum, left, right)
+
+    current.update(
+        {
+            "count": count,
+            "input_min": actual_minimum,
+            "input_max": actual_maximum,
+            "sha256": file_sha256(output),
+        }
+    )
+    write_metadata(metadata_path, current)
+    print(
+        f"Extended {output} ({previous_count} -> {count} pairs)",
+        flush=True,
+    )
+    return current
+
+
 def generate_profile(
     output_dir: Path,
     profile: str,
@@ -42,15 +91,29 @@ def generate_profile(
     if not force and output.is_file() and metadata_path.is_file():
         current = json.loads(metadata_path.read_text(encoding="utf-8"))
         if (
-            current.get("format_version") == FORMAT_VERSION
+            isinstance(current, dict)
+            and current.get("format_version") == FORMAT_VERSION
             and current.get("profile") == profile
             and current.get("seed") == seed
             and isinstance(current.get("count"), int)
-            and int(current["count"]) >= count
             and current.get("sha256") == file_sha256(output)
         ):
-            print(f"Reusing {output} ({current['count']} pairs)", flush=True)
-            return current
+            if int(current["count"]) >= count:
+                print(f"Reusing {output} ({current['count']} pairs)", flush=True)
+                return current
+            if (
+                profile in STRESS_DATA_PROFILES
+                and isinstance(current.get("input_min"), (int, float))
+                and isinstance(current.get("input_max"), (int, float))
+            ):
+                return extend_stress_profile(
+                    output,
+                    metadata_path,
+                    profile,
+                    count,
+                    seed,
+                    current,
+                )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(".csv.tmp")
@@ -104,7 +167,7 @@ def generate_profile(
             if decimal_places == 0
             else "deterministic_seeded_random_digits"
         )
-    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    write_metadata(metadata_path, metadata)
     print(f"Generated {output} ({count} pairs)", flush=True)
     return metadata
 

@@ -93,6 +93,30 @@ class SequentialStressDataTests(unittest.TestCase):
             self.assertEqual(bounded_path.read_bytes(), bounded_before)
             self.assertEqual(len(expand_profiles(["stress"])), 2)
 
+    def test_billion_stress_extends_existing_file_in_place(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            generate_profile(root, "stress_positive_integer_1b", 3, 42, False)
+            data_path = root / "stress_positive_integer_1b.csv"
+            inode_before = data_path.stat().st_ino
+            prefix_before = data_path.read_bytes()
+
+            metadata = generate_profile(
+                root,
+                "stress_positive_integer_1b",
+                5,
+                42,
+                False,
+            )
+
+            self.assertEqual(data_path.stat().st_ino, inode_before)
+            self.assertTrue(data_path.read_bytes().startswith(prefix_before))
+            self.assertEqual(metadata["count"], 5)
+            self.assertEqual(
+                data_path.read_text(encoding="utf-8").splitlines()[-1],
+                "5,5",
+            )
+
     def test_generator_records_cyclic_sequence_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             metadata = generate_profile(

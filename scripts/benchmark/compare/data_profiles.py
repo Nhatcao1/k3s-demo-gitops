@@ -63,16 +63,26 @@ def expand_profiles(requested: list[str]) -> list[str]:
     return list(dict.fromkeys(requested))
 
 
-def values(profile: str, count: int, seed: int, vector: str) -> Iterator[float]:
+def values(
+    profile: str,
+    count: int,
+    seed: int,
+    vector: str,
+    start_index: int = 0,
+) -> Iterator[float]:
     """Yield one stable vector without retaining it in memory."""
     if vector not in {"a", "b"}:
         raise ValueError("vector must be a or b")
+    if not 0 <= start_index <= count:
+        raise ValueError("start_index must be between zero and count")
     sign, decimal_places = DATA_PROFILES[profile]
     multiplier = -1.0 if sign == "negative" else 1.0
     if profile in STRESS_DATA_PROFILES:
-        for index in range(count):
+        for index in range(start_index, count):
             yield multiplier * float(index % STRESS_INPUT_BOUND + 1)
         return
+    if start_index:
+        raise ValueError("start_index is supported only for stress profiles")
     if profile in SEQUENTIAL_DATA_PROFILES:
         # The integer part follows the exact 1..40000 cycle. Decimal profiles
         # add deterministic seeded fractional digits; A and B use independent

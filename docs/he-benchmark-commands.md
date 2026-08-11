@@ -75,6 +75,11 @@ Use `--force` only when you intentionally want to regenerate them. If a later
 run needs two million values, prepare again with `--count 2000000`; every
 profile keeps stable deterministic prefixes for A and B.
 
+For the two billion-range stress profiles, a larger `--count` appends only the
+missing rows to the existing CSV and then updates its metadata/checksum. For
+example, extending 1,000 rows to 10 million continues at 1,001; it does not
+rewrite the first 1,000 rows. Do not use `--force` when extending.
+
 The preparation and comparison scripts delete their Job/Pod only after logs
 and result files are captured; the PVC and CSV data are never deleted. Before
 a new run, finished Jobs from older script versions are removed so a

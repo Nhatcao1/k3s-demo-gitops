@@ -34,6 +34,11 @@ The streaming generator is deterministic for the same profile and seed. For
 binary operations it creates independent A and B vectors from the same
 profile. A matching file is reused across benchmark runs.
 
+When a billion-range stress CSV exists but is smaller than the requested
+count, preparation appends from its recorded count and atomically updates the
+metadata file afterward. Existing bounded and legacy sequential files are not
+modified. `--force` remains the explicit full-regeneration option.
+
 `--data-profiles all` continues to mean only the original ten random profiles.
 `--data-profiles stress` selects only the two new billion-range integer
 profiles. The older bounded sequential profiles remain individually
