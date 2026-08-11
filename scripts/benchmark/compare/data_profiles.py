@@ -60,7 +60,13 @@ def expand_profiles(requested: list[str]) -> list[str]:
     invalid = sorted(set(requested) - set(DATA_PROFILES))
     if invalid:
         raise ValueError(f"invalid data profiles: {', '.join(invalid)}")
-    return list(dict.fromkeys(requested))
+    selected = list(dict.fromkeys(requested))
+    stress_selected = [name for name in selected if name in STRESS_DATA_PROFILES]
+    if stress_selected and len(stress_selected) != len(selected):
+        raise ValueError(
+            "billion-range stress profiles cannot be mixed with bounded profiles"
+        )
+    return selected
 
 
 def values(

@@ -49,6 +49,12 @@ class SequentialStressDataTests(unittest.TestCase):
         )
         self.assertIn("sequential_positive_integer", DATA_PROFILES)
 
+    def test_stress_and_bounded_profiles_cannot_share_one_run(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be mixed"):
+            expand_profiles(
+                ["positive_integer", "stress_positive_integer_1b"]
+            )
+
     def test_billion_stress_is_integer_only_and_keeps_old_bound(self) -> None:
         self.assertEqual(
             list(values("stress_positive_integer_1b", 3, 42, "a")),

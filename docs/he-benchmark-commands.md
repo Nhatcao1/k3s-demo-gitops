@@ -48,7 +48,8 @@ HE_COMPARE_DATA_*   reusable CSV data-generator Job and PVC
 ```
 
 Each Job group has CPU/memory requests and limits plus a temporary-storage
-size. `HE_COMPARE_DATA_STORAGE` controls the persistent CSV PVC, and
+size. `HE_COMPARE_DATA_*` controls the bounded-data PVC, `HE_STRESS_DATA_*`
+controls the billion-range stress PVC, and
 `HE_COMPARE_JOB_TTL_SECONDS` controls cleanup of completed comparison/data
 Jobs. These settings change only the benchmark Pods; evaluator resources use
 `HE_CPU_*` and `HE_GPU_*`.
@@ -66,9 +67,12 @@ HE_NAMESPACE=datalake-he \
   --seed 42
 ```
 
-The default PVC is `he-comparison-data` with size `10Gi`. Change
-`HE_COMPARE_DATA_PVC` or `HE_COMPARE_DATA_STORAGE` in `config/he-lab.env` if
-needed. The cluster must have a default StorageClass.
+Normal profiles use `he-comparison-data` (`10Gi`). Billion-range stress
+profiles use the separate `he-stress-data` PVC (`100Gi`). Change
+`HE_COMPARE_DATA_PVC` / `HE_COMPARE_DATA_STORAGE` or
+`HE_STRESS_DATA_PVC` / `HE_STRESS_DATA_STORAGE` in `config/he-lab.env` when
+needed. The scripts select the PVC from `--data-profiles`; the cluster must
+have a default StorageClass.
 
 Running the same preparation command again verifies and reuses matching files.
 Use `--force` only when you intentionally want to regenerate them. If a later
@@ -169,13 +173,14 @@ stress_positive_integer_1b:  1, 2, 3, ... 1000000000, 1, ...
 stress_negative_integer_1b: -1,-2,-3, ...-1000000000,-1, ...
 ```
 
-These files are separate from every existing `[-40000, 40000]` random and
-sequential dataset on the PVC, so preparing them does not overwrite the older
-tests. The requested row count controls how far the sequence is materialized;
-for example, ten million rows contain `1..10000000` in each direction.
+These files live on `he-stress-data`, separate from every existing
+`[-40000, 40000]` random and sequential dataset on `he-comparison-data`.
+Preparing stress data therefore cannot overwrite the older tests. The
+requested row count controls how far the sequence is materialized; for
+example, ten million rows contain `1..10000000` in each direction.
 
-Prepare one ten-million-row prefix on the same existing PVC. This does not
-delete or replace any random-profile CSV:
+Prepare one ten-million-row prefix on the dedicated stress PVC. This does not
+delete or replace any random-profile CSV on the normal PVC:
 
 ```sh
 HE_NAMESPACE=datalake-he \

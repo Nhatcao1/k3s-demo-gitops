@@ -47,17 +47,19 @@ rendered_job="$temporary_dir/job.yaml"
 if [ "$#" -gt 0 ]; then
   printf '%s\n' "$@" > "$arguments_file"
 fi
+he_select_comparison_data_volume "$@"
 gzip -c "$script_dir/compare_operations.py" > "$code_archive"
 gzip -c "$script_dir/data_profiles.py" > "$profiles_archive"
 
 echo "Comparison namespace: $namespace"
+echo "Comparison data PVC ($HE_COMPARE_DATA_PROFILE_GROUP): $HE_COMPARE_DATA_PVC"
 he_kubectl -n "$namespace" get "deployment/$HE_CPU_DEPLOYMENT" >/dev/null
 he_kubectl -n "$namespace" get "deployment/$HE_GPU_DEPLOYMENT" >/dev/null
 he_kubectl -n "$namespace" get "service/$HE_CPU_SERVICE" >/dev/null
 he_kubectl -n "$namespace" get "service/$HE_GPU_SERVICE" >/dev/null
 he_kubectl -n "$namespace" get "pvc/$HE_COMPARE_DATA_PVC" >/dev/null || {
   echo "Reusable data PVC is missing. Run:" >&2
-  echo "  ./scripts/benchmark/compare/prepare-data.sh --count <largest-size> --data-profiles all" >&2
+  echo "  ./scripts/benchmark/compare/prepare-data.sh --count <largest-size> --data-profiles $HE_COMPARE_DATA_PREPARE_GROUP" >&2
   exit 1
 }
 he_kubectl -n "$namespace" wait \

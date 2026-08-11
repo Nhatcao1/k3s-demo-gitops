@@ -60,6 +60,10 @@ groups: `HE_BENCH_*`, `HE_SUM_BENCH_*`, `HE_COMPARE_*`, and
 `HE_COMPARE_DATA_*`. Changing those values affects the next benchmark Job and
 does not restart either evaluator Deployment.
 
+Comparison storage is also split here: bounded profiles use
+`HE_COMPARE_DATA_PVC` / `HE_COMPARE_DATA_STORAGE`, while billion-range stress
+profiles use `HE_STRESS_DATA_PVC` / `HE_STRESS_DATA_STORAGE`.
+
 ### Optional K3s TLS workaround
 
 All repository scripts verify the Kubernetes API certificate by default. If a

@@ -36,14 +36,16 @@ profile. A matching file is reused across benchmark runs.
 
 When a billion-range stress CSV exists but is smaller than the requested
 count, preparation appends from its recorded count and atomically updates the
-metadata file afterward. Existing bounded and legacy sequential files are not
-modified. `--force` remains the explicit full-regeneration option.
+metadata file afterward. Existing bounded and legacy sequential files are on
+a different PVC and are not modified. `--force` remains the explicit
+full-regeneration option.
 
 `--data-profiles all` continues to mean only the original ten random profiles.
 `--data-profiles stress` selects only the two new billion-range integer
 profiles. The older bounded sequential profiles remain individually
-addressable. All files coexist on the same PVC under different names, so the
-new stress preparation does not replace existing data.
+addressable. Normal data uses `he-comparison-data`; stress data uses
+`he-stress-data`. Mixing the two families in one Job is rejected because one
+Job mounts only its selected PVC.
 
 The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile

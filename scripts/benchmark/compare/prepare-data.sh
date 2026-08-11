@@ -44,6 +44,7 @@ job_yaml="$temporary_dir/job.yaml"
 if [ "$#" -eq 0 ]; then
   set -- --count 1000000 --data-profiles all --seed 42
 fi
+he_select_comparison_data_volume "$@"
 printf '%s\n' "$@" > "$arguments_file"
 gzip -c "$script_dir/data_profiles.py" > "$temporary_dir/data_profiles.py.gz"
 gzip -c "$script_dir/generate_data.py" > "$temporary_dir/generate_data.py.gz"
@@ -55,7 +56,8 @@ if [ -z "$data_image" ]; then
     -o jsonpath='{.spec.template.spec.containers[0].image}')
 fi
 he_require_immutable_benchmark_image "$data_image" "Stress data generator"
-echo "Stress data generator image: $data_image"
+echo "Data generator image: $data_image"
+echo "Comparison data PVC ($HE_COMPARE_DATA_PROFILE_GROUP): $HE_COMPARE_DATA_PVC"
 
 HE_COMPARE_DATA_JOB_NAME=$job_name
 HE_COMPARE_DATA_IMAGE=$data_image

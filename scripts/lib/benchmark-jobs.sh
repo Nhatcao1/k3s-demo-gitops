@@ -18,6 +18,33 @@ he_require_immutable_benchmark_image() {
   esac
 }
 
+# Select one of the two comparison-data PVCs from the requested profile group.
+# The billion-range profiles never share storage with the bounded profiles.
+he_select_comparison_data_volume() {
+  he_data_uses_stress=false
+  for he_data_argument in "$@"; do
+    case "$he_data_argument" in
+      stress|stress_positive_integer_1b|stress_negative_integer_1b)
+        he_data_uses_stress=true
+        ;;
+    esac
+  done
+
+  if [ "$he_data_uses_stress" = "true" ]; then
+    HE_COMPARE_DATA_PVC=$HE_STRESS_DATA_PVC
+    HE_COMPARE_DATA_STORAGE=$HE_STRESS_DATA_STORAGE
+    HE_COMPARE_DATA_PROFILE_GROUP=stress
+    HE_COMPARE_DATA_PREPARE_GROUP=stress
+  else
+    HE_COMPARE_DATA_PVC=$HE_NORMAL_DATA_PVC
+    HE_COMPARE_DATA_STORAGE=$HE_NORMAL_DATA_STORAGE
+    HE_COMPARE_DATA_PROFILE_GROUP=normal
+    HE_COMPARE_DATA_PREPARE_GROUP=all
+  fi
+  export HE_COMPARE_DATA_PVC HE_COMPARE_DATA_STORAGE
+  export HE_COMPARE_DATA_PROFILE_GROUP HE_COMPARE_DATA_PREPARE_GROUP
+}
+
 # Delete one benchmark Job and wait until its Pod no longer holds the RWO PVC.
 he_delete_benchmark_job() {
   benchmark_namespace=$1
