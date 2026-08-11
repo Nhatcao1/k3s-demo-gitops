@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ from data_profiles import (  # noqa: E402
     values,
 )
 from generate_data import generate_profile  # noqa: E402
+from compare_operations import parse_args  # noqa: E402
 
 
 class SequentialStressDataTests(unittest.TestCase):
@@ -132,6 +134,22 @@ class FailureExtractionTests(unittest.TestCase):
             self.assertEqual(result["failures"][0]["value_count"], 5_000_000)
             self.assertTrue((output / "failures.csv").is_file())
             self.assertFalse((output / "summary.csv").exists())
+
+
+class ComparisonArgumentTests(unittest.TestCase):
+    def test_size_has_no_artificial_upper_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            arguments = [
+                "compare_operations.py",
+                "--sizes",
+                "100000000000",
+                "--data-dir",
+                directory,
+            ]
+            with mock.patch.object(sys, "argv", arguments):
+                parsed = parse_args()
+
+        self.assertEqual(parsed.sizes, [100_000_000_000])
 
 
 if __name__ == "__main__":

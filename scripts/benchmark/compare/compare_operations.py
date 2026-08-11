@@ -714,8 +714,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--abs-tolerance", type=float, default=0.1)
     parser.add_argument("--rel-tolerance", type=float, default=1e-6)
     args = parser.parse_args()
-    if not args.sizes or min(args.sizes) < 1 or max(args.sizes) > 10_000_000:
-        parser.error("sizes must be between 1 and 10000000")
+    if not args.sizes or min(args.sizes) < 1:
+        parser.error("sizes must be positive")
     if not 1 <= args.chunk_size <= 4096:
         parser.error("--chunk-size must be between 1 and 4096")
     if not 1 <= args.sum_request_size <= 1_000_000:

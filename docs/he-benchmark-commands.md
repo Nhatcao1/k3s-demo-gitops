@@ -205,6 +205,12 @@ attempt marker with Pod termination details. Completed sizes remain in
 `summary.csv`; the first failed limit is written to `failures.csv` and
 `result.json`.
 
+`--sizes` has no artificial upper ceiling; every value only needs to be a
+positive integer. The prepared PVC dataset must contain at least the largest
+requested size. Very large runs are expected to stop naturally at storage,
+memory, timeout, API, or cluster limits, and the last attempted case is kept in
+the failure outputs above.
+
 ## Demo API paths
 
 The Job uses:
