@@ -269,3 +269,7 @@ Monitor with:
 ```sh
 kubectl -n datalake-he get pvc,jobs,pods -w
 ```
+
+The value-range multiplication test (`1×2...1×N`, `2×2...2×N`) is documented
+separately in [`he-multiply-range-benchmark.md`](he-multiply-range-benchmark.md).
+It generates chunks in memory and does not use either benchmark-data PVC.

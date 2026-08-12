@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${HE_MULTIPLY_RANGE_JOB_NAME}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-multiply-range
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: ${HE_COMPARE_JOB_TTL_SECONDS}
+  activeDeadlineSeconds: ${HE_MULTIPLY_RANGE_JOB_TIMEOUT_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-multiply-range
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: multiply-range-client
+          image: ${HE_MULTIPLY_RANGE_CLIENT_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -c
+            - |
+              import gzip
+              import os
+              from pathlib import Path
+              import subprocess
+              import sys
+
+              source = Path("/benchmark/multiply_range.py.gz")
+              target = Path("/tmp/multiply_range.py")
+              with gzip.open(source, "rb") as compressed:
+                  target.write_bytes(compressed.read())
+              arguments = Path("/benchmark/arguments.txt").read_text(
+                  encoding="utf-8"
+              ).splitlines()
+              command = [
+                  sys.executable,
+                  str(target),
+                  "--cpu-url",
+                  os.environ["HE_MULTIPLY_RANGE_CPU_URL"],
+                  "--gpu-url",
+                  os.environ["HE_MULTIPLY_RANGE_GPU_URL"],
+                  *arguments,
+              ]
+              raise SystemExit(subprocess.run(command, check=False).returncode)
+          env:
+            - name: HE_MULTIPLY_RANGE_CPU_URL
+              value: ${HE_MULTIPLY_RANGE_CPU_URL}
+            - name: HE_MULTIPLY_RANGE_GPU_URL
+              value: ${HE_MULTIPLY_RANGE_GPU_URL}
+          resources:
+            requests:
+              cpu: "${HE_MULTIPLY_RANGE_REQUEST_CPU}"
+              memory: ${HE_MULTIPLY_RANGE_REQUEST_MEMORY}
+            limits:
+              cpu: "${HE_MULTIPLY_RANGE_LIMIT_CPU}"
+              memory: ${HE_MULTIPLY_RANGE_LIMIT_MEMORY}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: benchmark-code
+              mountPath: /benchmark
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: benchmark-code
+          configMap:
+            name: he-multiply-range-code
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: ${HE_MULTIPLY_RANGE_TMP_STORAGE}

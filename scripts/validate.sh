@@ -6,6 +6,7 @@ render_dir=$(mktemp -d)
 trap 'rm -rf "$render_dir"' EXIT HUP INT TERM
 . "$repo_dir/config/he-lab.env"
 . "$repo_dir/scripts/lib/kubectl.sh"
+. "$repo_dir/scripts/lib/benchmark-jobs.sh"
 
 command -v kubectl >/dev/null 2>&1 || {
   echo "kubectl is required." >&2
@@ -25,6 +26,7 @@ for template in \
   "$repo_dir/k8s/he-comparison-data-pvc.yaml" \
   "$repo_dir/k8s/he-comparison-data-job.yaml" \
   "$repo_dir/k8s/he-comparison-job.yaml" \
+  "$repo_dir/k8s/he-multiply-range-job.yaml" \
   "$repo_dir/k8s/sum-benchmark-job.yaml"; do
   test -f "$template"
 done
@@ -36,6 +38,9 @@ test -f "$repo_dir/scripts/benchmark/compare/compare_operations.py"
 test -f "$repo_dir/scripts/benchmark/compare/data_profiles.py"
 test -f "$repo_dir/scripts/benchmark/compare/generate_data.py"
 test -f "$repo_dir/scripts/benchmark/compare/extract_result.py"
+test -x "$repo_dir/scripts/benchmark/multiply-range/run.sh"
+test -f "$repo_dir/scripts/benchmark/multiply-range/multiply_range.py"
+test -f "$repo_dir/scripts/benchmark/multiply-range/extract_result.py"
 
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
@@ -53,6 +58,9 @@ export HE_COMPARE_LIMIT_MEMORY HE_COMPARE_TMP_STORAGE
 export HE_COMPARE_DATA_REQUEST_CPU HE_COMPARE_DATA_REQUEST_MEMORY
 export HE_COMPARE_DATA_LIMIT_CPU HE_COMPARE_DATA_LIMIT_MEMORY
 export HE_COMPARE_DATA_TMP_STORAGE HE_COMPARE_JOB_TTL_SECONDS
+export HE_MULTIPLY_RANGE_REQUEST_CPU HE_MULTIPLY_RANGE_REQUEST_MEMORY
+export HE_MULTIPLY_RANGE_LIMIT_CPU HE_MULTIPLY_RANGE_LIMIT_MEMORY
+export HE_MULTIPLY_RANGE_TMP_STORAGE
 export HE_NORMAL_DATA_PVC HE_NORMAL_DATA_STORAGE
 export HE_STRESS_DATA_PVC HE_STRESS_DATA_STORAGE
 
@@ -100,6 +108,15 @@ export HE_COMPARE_GPU_URL HE_COMPARE_JOB_TIMEOUT_SECONDS HE_COMPARE_DATA_PVC
 export HE_COMPARE_DATA_STORAGE HE_COMPARE_DATA_JOB_NAME
 export HE_COMPARE_DATA_JOB_TIMEOUT_SECONDS HE_COMPARE_DATA_IMAGE
 
+HE_MULTIPLY_RANGE_JOB_NAME=he-multiply-range-validation
+HE_MULTIPLY_RANGE_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
+HE_MULTIPLY_RANGE_CPU_URL="http://${HE_CPU_SERVICE}:${HE_SERVICE_PORT}"
+HE_MULTIPLY_RANGE_GPU_URL="http://${HE_GPU_SERVICE}:${HE_SERVICE_PORT}"
+HE_MULTIPLY_RANGE_JOB_TIMEOUT_SECONDS=43200
+export HE_MULTIPLY_RANGE_JOB_NAME HE_MULTIPLY_RANGE_CLIENT_IMAGE
+export HE_MULTIPLY_RANGE_CPU_URL HE_MULTIPLY_RANGE_GPU_URL
+export HE_MULTIPLY_RANGE_JOB_TIMEOUT_SECONDS
+
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/cpu-evaluator.yaml" > "$render_dir/cpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
@@ -117,6 +134,8 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/he-comparison-job.yaml" > "$render_dir/he-comparison.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-multiply-range-job.yaml" > "$render_dir/he-multiply-range.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sum-benchmark-job.yaml" > "$render_dir/sum-benchmark.yaml"
 
 for rendered in \
@@ -128,6 +147,7 @@ for rendered in \
   "$render_dir/he-comparison-data-pvc.yaml" \
   "$render_dir/he-comparison-data-job.yaml" \
   "$render_dir/he-comparison.yaml" \
+  "$render_dir/he-multiply-range.yaml" \
   "$render_dir/sum-benchmark.yaml"; do
   if grep -q '\${' "$rendered"; then
     echo "Unrendered placeholder in $rendered" >&2
@@ -178,6 +198,10 @@ grep -q 'imagePullPolicy: IfNotPresent' "$render_dir/he-comparison.yaml"
 grep -q "claimName: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison.yaml"
 grep -q "value: $HE_COMPARE_CPU_URL" "$render_dir/he-comparison.yaml"
 grep -q "value: $HE_COMPARE_GPU_URL" "$render_dir/he-comparison.yaml"
+grep -q "name: $HE_MULTIPLY_RANGE_JOB_NAME" "$render_dir/he-multiply-range.yaml"
+grep -q "image: $HE_MULTIPLY_RANGE_CLIENT_IMAGE" "$render_dir/he-multiply-range.yaml"
+grep -q "memory: $HE_MULTIPLY_RANGE_LIMIT_MEMORY" "$render_dir/he-multiply-range.yaml"
+grep -q "sizeLimit: $HE_MULTIPLY_RANGE_TMP_STORAGE" "$render_dir/he-multiply-range.yaml"
 grep -q "name: $SUM_BENCH_JOB_NAME" "$render_dir/sum-benchmark.yaml"
 grep -q "image: $SUM_BENCH_CLIENT_IMAGE" "$render_dir/sum-benchmark.yaml"
 grep -q "memory: $HE_SUM_BENCH_LIMIT_MEMORY" "$render_dir/sum-benchmark.yaml"
