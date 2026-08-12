@@ -7,6 +7,15 @@ repo_dir=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
 . "$repo_dir/scripts/lib/kubectl.sh"
 . "$repo_dir/scripts/lib/benchmark-jobs.sh"
 
+# Keep this runner usable when a server retains an older locally customized
+# he-lab.env. Explicit values from that file still take precedence.
+: "${HE_MULTIPLY_RANGE_REQUEST_CPU:=1}"
+: "${HE_MULTIPLY_RANGE_REQUEST_MEMORY:=512Mi}"
+: "${HE_MULTIPLY_RANGE_LIMIT_CPU:=2}"
+: "${HE_MULTIPLY_RANGE_LIMIT_MEMORY:=2Gi}"
+: "${HE_MULTIPLY_RANGE_TMP_STORAGE:=256Mi}"
+: "${HE_COMPARE_JOB_TTL_SECONDS:=600}"
+
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to render the multiplication-range Job." >&2
   exit 1
