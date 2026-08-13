@@ -14,6 +14,7 @@ BENCHMARK_DIR = REPO_ROOT / "scripts" / "benchmark" / "multiply-range"
 sys.path.insert(0, str(BENCHMARK_DIR))
 
 from multiply_range import (  # noqa: E402
+    factor_values,
     parse_args,
     run_backend,
     tolerance_passes,
@@ -35,6 +36,62 @@ class MultiplyRangeTests(unittest.TestCase):
         self.assertEqual(parsed.backends, ["cpu"])
         self.assertEqual(parsed.abs_tolerance, 0.0)
         self.assertEqual(parsed.rel_tolerance, 0.0)
+        self.assertTrue(parsed.powers_of_two)
+
+    def test_power_sampling_includes_exact_non_power_maximum(self) -> None:
+        self.assertEqual(
+            list(factor_values(2, 1_000_000_000, powers_of_two=True)),
+            [
+                2,
+                4,
+                8,
+                16,
+                32,
+                64,
+                128,
+                256,
+                512,
+                1024,
+                2048,
+                4096,
+                8192,
+                16384,
+                32768,
+                65536,
+                131072,
+                262144,
+                524288,
+                1048576,
+                2097152,
+                4194304,
+                8388608,
+                16777216,
+                33554432,
+                67108864,
+                134217728,
+                268435456,
+                536870912,
+                1_000_000_000,
+            ],
+        )
+
+    def test_fixed_step_sampling_includes_exact_maximum(self) -> None:
+        self.assertEqual(list(factor_values(2, 10, factor_step=3)), [2, 5, 8, 10])
+
+    def test_power_sampling_rejects_non_power_start(self) -> None:
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "multiply_range.py",
+                "--max-factor",
+                "100",
+                "--start-factor",
+                "3",
+                "--powers-of-two",
+            ],
+        ), self.assertRaises(SystemExit):
+            parse_args()
 
     def test_range_is_chunked_and_checkpointed_without_dataset(self) -> None:
         def fake_post(

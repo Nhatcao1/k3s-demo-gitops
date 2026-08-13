@@ -7,7 +7,7 @@ import argparse
 import json
 import math
 import time
-from typing import Any
+from typing import Any, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -123,6 +123,22 @@ def tolerance_passes(
     )
 
 
+def factor_values(
+    start_factor: int,
+    max_factor: int,
+    factor_step: int = 1,
+    powers_of_two: bool = False,
+) -> Iterator[int]:
+    """Yield a bounded factor sample and always include the exact maximum."""
+    factor = start_factor
+    while factor <= max_factor:
+        yield factor
+        if factor == max_factor:
+            return
+        candidate = factor * 2 if powers_of_two else factor + factor_step
+        factor = max_factor if candidate > max_factor else candidate
+
+
 def run_backend(
     backend: str,
     base_url: str,
@@ -135,12 +151,14 @@ def run_backend(
     timeout: float,
     absolute_tolerance: float,
     relative_tolerance: float,
+    factor_step: int = 1,
+    powers_of_two: bool = False,
 ) -> list[dict[str, Any]]:
     path = "/v1/demo/bgv/evaluate" if scheme == "BGV" else "/v1/demo/evaluate"
     url = endpoint(base_url, path)
     cases: list[dict[str, Any]] = []
-    checkpoint_start = start_factor
-    factor = start_factor
+    checkpoint_start: int | None = None
+    checkpoint_end: int | None = None
     checkpoint_values = 0
     checkpoint_requests = 0
     checkpoint_round_trip = 0.0
@@ -154,25 +172,45 @@ def run_backend(
     maximum_absolute_error = 0.0
     maximum_relative_error = 0.0
 
-    while factor <= max_factor:
-        checkpoint_end = checkpoint_start + checkpoint_size - 1
-        chunk_end = min(
-            factor + chunk_size - 1,
-            checkpoint_end,
+    factors_iter = iter(
+        factor_values(
+            start_factor,
             max_factor,
+            factor_step,
+            powers_of_two,
         )
-        factors = list(range(factor, chunk_end + 1))
+    )
+    exhausted = False
+    while not exhausted:
+        factors: list[int] = []
+        chunk_limit = min(chunk_size, checkpoint_size - checkpoint_values)
+        for _ in range(chunk_limit):
+            try:
+                factors.append(next(factors_iter))
+            except StopIteration:
+                exhausted = True
+                break
+        if not factors:
+            break
+        chunk_start = factors[0]
+        chunk_end = factors[-1]
+        if checkpoint_start is None:
+            checkpoint_start = chunk_start
+        checkpoint_end = chunk_end
         left = [base] * len(factors)
         print(
-            f"{backend.upper()} {scheme} base={base} factors={factor}..{chunk_end}",
+            f"{backend.upper()} {scheme} base={base} "
+            f"factors={chunk_start}..{chunk_end} samples={len(factors)}",
             flush=True,
         )
         attempt = {
             "scheme": scheme,
             "backend": backend,
             "base": base,
-            "factor_start": factor,
+            "factor_start": chunk_start,
             "factor_end": chunk_end,
+            "sampling": "power_of_two" if powers_of_two else "step",
+            "factor_step": None if powers_of_two else factor_step,
         }
         print(
             ATTEMPT_MARKER + json.dumps(attempt, separators=(",", ":")),
@@ -193,7 +231,7 @@ def run_backend(
         except Exception as error:
             failure = {
                 **attempt,
-                "factor": factor,
+                "factor": chunk_start,
                 "failure_type": "runtime_failure",
                 "error_type": type(error).__name__,
                 "error_message": str(error)[:1000],
@@ -251,18 +289,17 @@ def run_backend(
         checkpoint_round_trip += round_trip
         for name, value in timings.items():
             checkpoint_timings[name] += value
-        factor = chunk_end + 1
-
-        if (
-            checkpoint_values >= checkpoint_size
-            or factor > max_factor
-        ):
+        if checkpoint_values >= checkpoint_size or exhausted:
+            assert checkpoint_start is not None
+            assert checkpoint_end is not None
             case = {
                 "scheme": scheme,
                 "backend": backend,
                 "base": base,
                 "factor_start": checkpoint_start,
-                "factor_end": factor - 1,
+                "factor_end": checkpoint_end,
+                "sampling": "power_of_two" if powers_of_two else "step",
+                "factor_step": None if powers_of_two else factor_step,
                 "value_count": checkpoint_values,
                 "requests": checkpoint_requests,
                 "maximum_absolute_error": maximum_absolute_error,
@@ -276,7 +313,8 @@ def run_backend(
                 flush=True,
             )
             cases.append(case)
-            checkpoint_start = factor
+            checkpoint_start = None
+            checkpoint_end = None
             checkpoint_values = 0
             checkpoint_requests = 0
             checkpoint_round_trip = 0.0
@@ -295,6 +333,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bases", type=int, nargs="+", default=[1, 2])
     parser.add_argument("--start-factor", type=int, default=2)
     parser.add_argument("--max-factor", type=int, required=True)
+    sampling = parser.add_mutually_exclusive_group()
+    sampling.add_argument("--step", type=int)
+    sampling.add_argument("--powers-of-two", action="store_true")
     parser.add_argument("--chunk-size", type=int, default=4096)
     parser.add_argument("--checkpoint-size", type=int, default=100_000)
     parser.add_argument("--timeout", type=float, default=3600.0)
@@ -313,6 +354,13 @@ def parse_args() -> argparse.Namespace:
         parser.error("--bases must contain positive integers")
     if args.start_factor < 1 or args.max_factor < args.start_factor:
         parser.error("factor range must be positive and non-empty")
+    if args.step is not None and args.step < 1:
+        parser.error("--step must be positive")
+    if args.step is None and not args.powers_of_two:
+        args.powers_of_two = True
+    if args.powers_of_two and args.start_factor & (args.start_factor - 1):
+        parser.error("--powers-of-two requires a power-of-two --start-factor")
+    args.step = args.step or 1
     if not 1 <= args.chunk_size <= 4096:
         parser.error("--chunk-size must be between 1 and 4096")
     if args.checkpoint_size < 1:
@@ -350,6 +398,8 @@ def main() -> None:
                     args.timeout,
                     args.abs_tolerance,
                     args.rel_tolerance,
+                    factor_step=args.step,
+                    powers_of_two=args.powers_of_two,
                 )
             )
     run = {
@@ -358,6 +408,8 @@ def main() -> None:
         "bases": args.bases,
         "start_factor": args.start_factor,
         "max_factor": args.max_factor,
+        "sampling": "power_of_two" if args.powers_of_two else "step",
+        "factor_step": None if args.powers_of_two else args.step,
         "chunk_size": args.chunk_size,
         "checkpoint_size": args.checkpoint_size,
         "accuracy_passed": True,

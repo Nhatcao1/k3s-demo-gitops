@@ -1,12 +1,16 @@
 # HE multiplication range benchmark
 
-This benchmark tests increasing multiplication values rather than increasing
-CSV row counts:
+This benchmark samples increasing multiplication values rather than increasing
+CSV row counts. Power-of-two sampling is the safe default:
 
 ```text
-base 1: 1×2, 1×3, ... 1×N
-base 2: 2×2, 2×3, ... 2×N
+base 1: 1×2, 1×4, 1×8, ... 1×N
+base 2: 2×2, 2×4, 2×8, ... 2×N
 ```
+
+If `N` is not a power of two, the exact `N` is appended as the final sample.
+This makes a one-billion limit about 30 samples per base/backend instead of one
+billion samples.
 
 Every product is independent and consumes one ciphertext multiplication
 level. This tests numeric range/accuracy and throughput; it is not chained
@@ -14,8 +18,8 @@ multiplication such as `(((2×2)×3)×4)`, which would instead stress
 multiplicative depth.
 
 It generates at most `--chunk-size` values in memory, calls the deployed CPU
-and GPU `POST /v1/demo/evaluate` multiply operation, and compares every output
-with the exact integer product. It does not create or mount a data PVC.
+and GPU `POST /v1/demo/evaluate` multiply operation, and compares every sampled
+output with the exact integer product. It does not create or mount a data PVC.
 
 ## Run
 
@@ -27,17 +31,34 @@ HE_NAMESPACE=datalake-he \
   --scheme CKKS \
   --bases 1 2 \
   --start-factor 2 \
-  --max-factor 1000000 \
+  --max-factor 1000000000 \
+  --powers-of-two \
   --chunk-size 4096 \
-  --checkpoint-size 100000 \
+  --checkpoint-size 10 \
   --abs-tolerance 0.1 \
   --rel-tolerance 0.000001 \
   --timeout 3600
 ```
 
-Increase only `--max-factor` after that run succeeds. A checkpoint is emitted
-after each configured factor interval, so completed ranges remain recoverable
-if a later request or Pod fails.
+`--powers-of-two` is optional because it is the default when no sampling flag
+is supplied. `--checkpoint-size` counts tested samples, not every skipped
+integer. Completed checkpoints remain recoverable if a later request fails.
+
+For a fixed interval instead, use:
+
+```sh
+./scripts/benchmark/multiply-range/run.sh \
+  --scheme CKKS \
+  --bases 1 2 \
+  --start-factor 2 \
+  --max-factor 1000000000 \
+  --step 10000000 \
+  --checkpoint-size 10 \
+  --timeout 3600
+```
+
+The exact maximum is also appended when the step does not land on it. Use
+`--step 1` only for deliberately small exhaustive ranges.
 
 The CKKS run stops immediately when:
 
@@ -65,8 +86,9 @@ HE_NAMESPACE=datalake-he \
   --bases 1 2 \
   --start-factor 2 \
   --max-factor 1000000000 \
+  --powers-of-two \
   --chunk-size 4096 \
-  --checkpoint-size 100000 \
+  --checkpoint-size 10 \
   --timeout 3600
 ```
 
