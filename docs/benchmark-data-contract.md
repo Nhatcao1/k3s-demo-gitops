@@ -51,10 +51,10 @@ The runner loads only the current profile/size, emits its result, releases its
 arrays, and then loads the next size. It never retains every requested profile
 or the maximum-sized arrays for the whole Job.
 
-Benchmark Jobs are removed after their logs/results are collected, while this
-PVC remains. Finished legacy Jobs are cleaned before a new run, active Jobs
-are treated as an exclusive-PVC conflict, and `ttlSecondsAfterFinished: 600`
-is the fallback when the launching shell disappears.
+Comparison Jobs and Pods are retained after completion so their Kubernetes
+logs can be recovered when the launching shell or laptop disconnects. A later
+run preserves finished Jobs and treats only an active Job as an exclusive-PVC
+conflict. Delete retained Jobs manually after their logs are no longer needed.
 
 ## Result files
 
@@ -100,6 +100,14 @@ catchable failure records its operation, backend, size, exception type, and
 message. For an uncatchable container termination, the extractor combines the
 last attempt with Kubernetes Pod status and records the interrupted size as a
 hard limit instead of silently losing it.
+
+If the launching shell disconnects before creating local result files, recover
+the retained log with:
+
+```sh
+kubectl -n datalake-he get jobs -l app=he-operation-comparison
+kubectl -n datalake-he logs job/<job-name> > recovered-job.log
+```
 
 ## Result scope
 

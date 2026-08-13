@@ -61,13 +61,9 @@ template="$repo_dir/k8s/he-comparison-job.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
 
 temporary_dir=$(mktemp -d)
-job_created=false
 cleanup() {
   cleanup_status=$?
   trap - EXIT HUP INT TERM
-  if [ "$job_created" = "true" ]; then
-    he_delete_benchmark_job "$namespace" "job/$job_name" || true
-  fi
   rm -rf "$temporary_dir"
   exit "$cleanup_status"
 }
@@ -141,13 +137,11 @@ export HE_NAMESPACE HE_COMPARE_JOB_NAME HE_COMPARE_CLIENT_IMAGE HE_COMPARE_DATA_
 export HE_COMPARE_CPU_URL HE_COMPARE_GPU_URL HE_COMPARE_JOB_TIMEOUT_SECONDS
 export HE_COMPARE_REQUEST_CPU HE_COMPARE_REQUEST_MEMORY HE_COMPARE_LIMIT_CPU
 export HE_COMPARE_LIMIT_MEMORY HE_COMPARE_TMP_STORAGE
-export HE_COMPARE_JOB_TTL_SECONDS
 
 python3 "$renderer" "$template" > "$rendered_job"
 he_kubectl -n "$namespace" delete "job/$job_name" \
   --ignore-not-found >/dev/null
 he_kubectl create -f "$rendered_job"
-job_created=true
 
 case "$job_timeout" in
   *[!0-9]*|""|0)
@@ -190,8 +184,7 @@ fi
 he_kubectl -n "$namespace" logs "job/$job_name" > "$job_log"
 sed -n '1,260p' "$job_log"
 python3 "$script_dir/extract_result.py" "$job_log" "$output_dir"
-he_delete_benchmark_job "$namespace" "job/$job_name"
-job_created=false
 
-echo "Completed Kubernetes Job (cleaned up): $namespace/$job_name"
+echo "Completed Kubernetes Job retained for log recovery: $namespace/$job_name"
+echo "Read it later: kubectl -n $namespace logs job/$job_name"
 echo "Results: $output_dir"

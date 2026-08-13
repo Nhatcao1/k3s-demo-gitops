@@ -214,7 +214,10 @@ grep -q "name: $BENCH_JOB_NAME" "$render_dir/benchmark.yaml"
 grep -q "cpu: \"$HE_BENCH_LIMIT_CPU\"" "$render_dir/benchmark.yaml"
 grep -q "sizeLimit: $HE_BENCH_TMP_STORAGE" "$render_dir/benchmark.yaml"
 grep -q "name: $HE_COMPARE_JOB_NAME" "$render_dir/he-comparison.yaml"
-grep -q "ttlSecondsAfterFinished: $HE_COMPARE_JOB_TTL_SECONDS" "$render_dir/he-comparison.yaml"
+if grep -q 'ttlSecondsAfterFinished:' "$render_dir/he-comparison.yaml"; then
+  echo "Comparison Job must be retained for log recovery." >&2
+  exit 1
+fi
 grep -q "memory: $HE_COMPARE_LIMIT_MEMORY" "$render_dir/he-comparison.yaml"
 grep -q "sizeLimit: $HE_COMPARE_TMP_STORAGE" "$render_dir/he-comparison.yaml"
 grep -q "name: $HE_COMPARE_DATA_PVC" "$render_dir/he-comparison-data-pvc.yaml"

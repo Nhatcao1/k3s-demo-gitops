@@ -7,7 +7,6 @@ metadata:
     app: he-operation-comparison
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: ${HE_COMPARE_JOB_TTL_SECONDS}
   activeDeadlineSeconds: ${HE_COMPARE_JOB_TIMEOUT_SECONDS}
   template:
     metadata:

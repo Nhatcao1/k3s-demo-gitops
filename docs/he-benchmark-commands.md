@@ -50,8 +50,9 @@ HE_COMPARE_DATA_*   reusable CSV data-generator Job and PVC
 Each Job group has CPU/memory requests and limits plus a temporary-storage
 size. `HE_COMPARE_DATA_*` controls the bounded-data PVC, `HE_STRESS_DATA_*`
 controls the billion-range stress PVC, and
-`HE_COMPARE_JOB_TTL_SECONDS` controls cleanup of completed comparison/data
-Jobs. These settings change only the benchmark Pods; evaluator resources use
+`HE_COMPARE_JOB_TTL_SECONDS` controls cleanup of data-preparation Jobs only.
+Comparison Jobs intentionally have no TTL and remain available for log
+recovery. These settings change only benchmark Pods; evaluator resources use
 `HE_CPU_*` and `HE_GPU_*`.
 
 ## 2. Prepare reusable data once
@@ -84,13 +85,11 @@ missing rows to the existing CSV and then updates its metadata/checksum. For
 example, extending 1,000 rows to 10 million continues at 1,001; it does not
 rewrite the first 1,000 rows. Do not use `--force` when extending.
 
-The preparation and comparison scripts delete their Job/Pod only after logs
-and result files are captured; the PVC and CSV data are never deleted. Before
-a new run, finished Jobs from older script versions are removed so a
-ReadWriteOnce Ceph/RBD volume can detach from its previous node. A still-active
-Job blocks the new run instead of creating a second Pod that cannot mount the
-same volume. Kubernetes TTL cleanup defaults to ten minutes through
-`HE_COMPARE_JOB_TTL_SECONDS`.
+The preparation script removes its Job after completion, while comparison Jobs
+and Pods are retained for later log recovery. The PVC and CSV data are never
+deleted. A still-active Job blocks a new run instead of creating a second Pod
+that cannot mount the same ReadWriteOnce volume. Finished comparison Jobs do
+not block the next run and must be deleted manually when no longer needed.
 
 The standalone generator code is
 `scripts/benchmark/compare/generate_data.py`. It can also run outside K3s:
@@ -271,6 +270,13 @@ Monitor with:
 
 ```sh
 kubectl -n datalake-he get pvc,jobs,pods -w
+```
+
+Recover logs after disconnecting:
+
+```sh
+kubectl -n datalake-he get jobs -l app=he-operation-comparison
+kubectl -n datalake-he logs job/<job-name> > recovered-job.log
 ```
 
 The value-range multiplication test (`1×2...1×N`, `2×2...2×N`) is documented

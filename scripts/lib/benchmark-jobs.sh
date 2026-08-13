@@ -58,7 +58,7 @@ he_delete_benchmark_job() {
     -l "job-name=$benchmark_job_name" --timeout=2m >/dev/null 2>&1 || true
 }
 
-# Remove completed/failed Jobs left by older scripts. Refuse to compete with
+# Preserve completed/failed Jobs for log recovery. Refuse to compete only with
 # an active Job because the comparison-data PVC is intentionally RWO.
 he_prepare_benchmark_pvc() {
   benchmark_namespace=$1
@@ -75,8 +75,7 @@ he_prepare_benchmark_pvc() {
         -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\n"}{end}')
       case "$benchmark_conditions" in
         *Complete=True*|*Failed=True*)
-          echo "Removing finished benchmark $benchmark_job to release the PVC."
-          he_delete_benchmark_job "$benchmark_namespace" "$benchmark_job"
+          :
           ;;
         *)
           active_jobs="$active_jobs $benchmark_job"
