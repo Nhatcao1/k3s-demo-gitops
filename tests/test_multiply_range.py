@@ -17,6 +17,7 @@ from multiply_range import (  # noqa: E402
     factor_values,
     parse_args,
     run_backend,
+    run_sum_backend,
     tolerance_passes,
 )
 
@@ -92,6 +93,88 @@ class MultiplyRangeTests(unittest.TestCase):
             ],
         ), self.assertRaises(SystemExit):
             parse_args()
+
+    def test_sum_range_reaches_one_hundred_billion_without_large_input(self) -> None:
+        targets: list[int] = []
+
+        def fake_post(
+            _url: str, payload: dict[str, object], _timeout: float
+        ) -> tuple[dict[str, object], float]:
+            values = payload["values_a"]
+            assert isinstance(values, list)
+            self.assertEqual(len(values), 16)
+            target = round(sum(float(value) for value in values))
+            targets.append(target)
+            return (
+                {
+                    "values": [float(target)],
+                    "timings": {
+                        "context_keygen_seconds": 0.1,
+                        "encrypt_seconds": 0.1,
+                        "calculation_seconds": 0.1,
+                        "decrypt_seconds": 0.1,
+                        "total_seconds": 0.4,
+                    },
+                },
+                0.5,
+            )
+
+        with mock.patch("multiply_range.post_json", side_effect=fake_post):
+            cases = run_sum_backend(
+                "gpu",
+                "http://gpu",
+                "CKKS",
+                2,
+                100_000_000_000,
+                16,
+                10.0,
+                0.1,
+                1e-6,
+                powers_of_two=True,
+            )
+
+        self.assertEqual(targets[-1], 100_000_000_000)
+        self.assertEqual(cases[-1]["target_sum"], 100_000_000_000)
+
+    def test_bgv_sum_range_uses_exact_integers(self) -> None:
+        observed_inputs: list[list[int]] = []
+
+        def fake_post(
+            _url: str, payload: dict[str, object], _timeout: float
+        ) -> tuple[dict[str, object], float]:
+            values = payload["values_a"]
+            assert isinstance(values, list)
+            self.assertTrue(all(isinstance(value, int) for value in values))
+            observed_inputs.append(values)
+            return (
+                {
+                    "values": [sum(values)],
+                    "timings": {
+                        "context_keygen_seconds": 0.1,
+                        "encrypt_seconds": 0.1,
+                        "calculation_seconds": 0.1,
+                        "decrypt_seconds": 0.1,
+                        "total_seconds": 0.4,
+                    },
+                },
+                0.5,
+            )
+
+        with mock.patch("multiply_range.post_json", side_effect=fake_post):
+            cases = run_sum_backend(
+                "cpu",
+                "http://cpu",
+                "BGV",
+                100_000_000_000,
+                100_000_000_000,
+                4096,
+                10.0,
+                0.0,
+                0.0,
+                powers_of_two=True,
+            )
+        self.assertEqual(sum(observed_inputs[0]), 100_000_000_000)
+        self.assertEqual(cases[0]["maximum_absolute_error"], 0.0)
 
     def test_range_is_chunked_and_checkpointed_without_dataset(self) -> None:
         def fake_post(

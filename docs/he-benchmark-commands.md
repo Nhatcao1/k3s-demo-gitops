@@ -277,3 +277,6 @@ It generates chunks in memory and does not use either benchmark-data PVC.
 Small ciphertext correctness checks for the real `POST /v1/evaluate` endpoint
 are separate from benchmarks. See
 [`he-evaluate-api-tests.md`](he-evaluate-api-tests.md).
+
+The no-PVC SUM numeric-range test through 100 billion is documented in
+[`he-sum-range-benchmark.md`](he-sum-range-benchmark.md).

@@ -62,7 +62,9 @@ def post_json(
     return result, time.perf_counter() - started
 
 
-def check_backend(base_url: str, scheme: str, timeout: float) -> None:
+def check_backend(
+    base_url: str, scheme: str, operation: str, timeout: float
+) -> None:
     capabilities = get_json(endpoint(base_url, "/v1/capabilities"), timeout)
     if scheme == "BGV":
         demo_schemes = capabilities.get("demo_schemes")
@@ -71,8 +73,8 @@ def check_backend(base_url: str, scheme: str, timeout: float) -> None:
         if capabilities.get("bgv_demo_endpoint") != "/v1/demo/bgv/evaluate":
             raise RuntimeError(f"{base_url} has no BGV multiplication endpoint")
         operations = capabilities.get("bgv_demo_operations")
-        if not isinstance(operations, list) or "multiply" not in operations:
-            raise RuntimeError(f"{base_url} has no BGV demo multiply operation")
+        if not isinstance(operations, list) or operation not in operations:
+            raise RuntimeError(f"{base_url} has no BGV demo {operation} operation")
         return
 
     advertised_scheme = str(capabilities.get("scheme", "")).upper()
@@ -81,8 +83,8 @@ def check_backend(base_url: str, scheme: str, timeout: float) -> None:
             f"{base_url} advertises {advertised_scheme or 'no scheme'}, not CKKS"
         )
     operations = capabilities.get("native_demo_operations")
-    if not isinstance(operations, list) or "multiply" not in operations:
-        raise RuntimeError(f"{base_url} has no demo multiply operation")
+    if not isinstance(operations, list) or operation not in operations:
+        raise RuntimeError(f"{base_url} has no demo {operation} operation")
 
 
 def response_values(response: dict[str, Any], expected_count: int) -> list[float]:
@@ -324,15 +326,136 @@ def run_backend(
     return cases
 
 
+def run_sum_backend(
+    backend: str,
+    base_url: str,
+    scheme: str,
+    start_sum: int,
+    max_sum: int,
+    value_count: int,
+    timeout: float,
+    absolute_tolerance: float,
+    relative_tolerance: float,
+    factor_step: int = 1,
+    powers_of_two: bool = False,
+) -> list[dict[str, Any]]:
+    """Test sampled target sums without allocating target_sum elements."""
+    url = endpoint(
+        base_url,
+        "/v1/demo/bgv/evaluate" if scheme == "BGV" else "/v1/demo/evaluate",
+    )
+    cases: list[dict[str, Any]] = []
+    for target_sum in factor_values(
+        start_sum, max_sum, factor_step, powers_of_two
+    ):
+        if scheme == "BGV":
+            quotient, remainder = divmod(target_sum, value_count)
+            values: list[int | float] = [quotient + 1] * remainder
+            values.extend([quotient] * (value_count - remainder))
+        else:
+            repeated = float(target_sum) / value_count
+            values = [repeated] * value_count
+            # Correct ordinary floating accumulation before encryption so this
+            # test measures HE error rather than Python input-generation error.
+            values[-1] += float(target_sum) - math.fsum(values)
+        attempt = {
+            "operation": "sum",
+            "scheme": scheme,
+            "backend": backend,
+            "target_sum": target_sum,
+            "value_count": value_count,
+            "sampling": "power_of_two" if powers_of_two else "step",
+            "factor_step": None if powers_of_two else factor_step,
+        }
+        print(
+            f"{backend.upper()} {scheme} SUM target={target_sum} "
+            f"values={value_count}",
+            flush=True,
+        )
+        print(
+            ATTEMPT_MARKER + json.dumps(attempt, separators=(",", ":")),
+            flush=True,
+        )
+        try:
+            response, round_trip = post_json(
+                url,
+                {"operation": "sum", "values_a": values},
+                timeout,
+            )
+            observed = response_values(response, 1)[0]
+            timings = response_timings(response)
+        except Exception as error:
+            failure = {
+                **attempt,
+                "failure_type": "runtime_failure",
+                "error_type": type(error).__name__,
+                "error_message": str(error)[:1000],
+            }
+            print(
+                FAILURE_MARKER + json.dumps(failure, separators=(",", ":")),
+                flush=True,
+            )
+            raise
+
+        expected = float(target_sum)
+        absolute_error = abs(observed - expected)
+        relative_error = absolute_error / max(abs(expected), 1e-12)
+        if not tolerance_passes(
+            absolute_error,
+            relative_error,
+            absolute_tolerance,
+            relative_tolerance,
+        ):
+            failure = {
+                **attempt,
+                "expected": expected,
+                "actual": observed,
+                "absolute_error": absolute_error,
+                "relative_error": relative_error,
+                "absolute_tolerance": absolute_tolerance,
+                "relative_tolerance": relative_tolerance,
+                "failure_type": "accuracy_limit",
+                "error_type": "AccuracyThresholdExceeded",
+                "error_message": (
+                    f"both {scheme} accuracy tolerances were exceeded"
+                ),
+            }
+            print(
+                FAILURE_MARKER + json.dumps(failure, separators=(",", ":")),
+                flush=True,
+            )
+            raise RuntimeError(
+                f"{backend} {scheme} SUM accuracy limit at {target_sum}"
+            )
+        case = {
+            **attempt,
+            "expected": expected,
+            "actual": observed,
+            "maximum_absolute_error": absolute_error,
+            "maximum_relative_error": relative_error,
+            "accuracy_passed": True,
+            "end_to_end_seconds": round_trip,
+            **timings,
+        }
+        print(
+            CASE_MARKER + json.dumps(case, separators=(",", ":")),
+            flush=True,
+        )
+        cases.append(case)
+    return cases
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cpu-url", default="http://he-evaluator:8080")
     parser.add_argument("--gpu-url", default="http://he-evaluator-gpu:8080")
+    parser.add_argument("--operation", choices=("multiply", "sum"), default="multiply")
     parser.add_argument("--scheme", type=str.upper, default="CKKS")
     parser.add_argument("--backends", nargs="+")
     parser.add_argument("--bases", type=int, nargs="+", default=[1, 2])
-    parser.add_argument("--start-factor", type=int, default=2)
-    parser.add_argument("--max-factor", type=int, required=True)
+    parser.add_argument("--start-factor", "--start-sum", dest="start_factor", type=int, default=2)
+    parser.add_argument("--max-factor", "--max-sum", dest="max_factor", type=int, required=True)
+    parser.add_argument("--sum-value-count", type=int, default=4096)
     sampling = parser.add_mutually_exclusive_group()
     sampling.add_argument("--step", type=int)
     sampling.add_argument("--powers-of-two", action="store_true")
@@ -363,6 +486,8 @@ def parse_args() -> argparse.Namespace:
     args.step = args.step or 1
     if not 1 <= args.chunk_size <= 4096:
         parser.error("--chunk-size must be between 1 and 4096")
+    if not 1 <= args.sum_value_count <= 4096:
+        parser.error("--sum-value-count must be between 1 and 4096")
     if args.checkpoint_size < 1:
         parser.error("--checkpoint-size must be positive")
     if args.timeout <= 0:
@@ -380,21 +505,19 @@ def main() -> None:
     args = parse_args()
     urls = {"cpu": args.cpu_url, "gpu": args.gpu_url}
     for backend in args.backends:
-        check_backend(urls[backend], args.scheme, args.timeout)
+        check_backend(urls[backend], args.scheme, args.operation, args.timeout)
 
     completed: list[dict[str, Any]] = []
-    for base in args.bases:
+    if args.operation == "sum":
         for backend in args.backends:
             completed.extend(
-                run_backend(
+                run_sum_backend(
                     backend,
                     urls[backend],
                     args.scheme,
-                    base,
                     args.start_factor,
                     args.max_factor,
-                    args.chunk_size,
-                    args.checkpoint_size,
+                    args.sum_value_count,
                     args.timeout,
                     args.abs_tolerance,
                     args.rel_tolerance,
@@ -402,7 +525,28 @@ def main() -> None:
                     powers_of_two=args.powers_of_two,
                 )
             )
+    else:
+        for base in args.bases:
+            for backend in args.backends:
+                completed.extend(
+                    run_backend(
+                        backend,
+                        urls[backend],
+                        args.scheme,
+                        base,
+                        args.start_factor,
+                        args.max_factor,
+                        args.chunk_size,
+                        args.checkpoint_size,
+                        args.timeout,
+                        args.abs_tolerance,
+                        args.rel_tolerance,
+                        factor_step=args.step,
+                        powers_of_two=args.powers_of_two,
+                    )
+                )
     run = {
+        "operation": args.operation,
         "scheme": args.scheme,
         "backends": args.backends,
         "bases": args.bases,
@@ -412,6 +556,7 @@ def main() -> None:
         "factor_step": None if args.powers_of_two else args.step,
         "chunk_size": args.chunk_size,
         "checkpoint_size": args.checkpoint_size,
+        "sum_value_count": args.sum_value_count if args.operation == "sum" else None,
         "accuracy_passed": True,
         "completed_checkpoints": len(completed),
     }
