@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${HE_EVALUATE_API_JOB_NAME}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-evaluate-api-test
+    backend: ${HE_EVALUATE_API_BACKEND}
+    operation: ${HE_EVALUATE_API_OPERATION}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: ${HE_EVALUATE_API_JOB_TTL_SECONDS}
+  activeDeadlineSeconds: ${HE_EVALUATE_API_JOB_TIMEOUT_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-evaluate-api-test
+        backend: ${HE_EVALUATE_API_BACKEND}
+        operation: ${HE_EVALUATE_API_OPERATION}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: ${HE_CPU_DEPLOYMENT}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: trusted-evaluate-client
+          image: ${HE_EVALUATE_API_CLIENT_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - /evaluate-tests/test_${HE_EVALUATE_API_OPERATION}.py
+          env:
+            - name: HE_EVALUATE_API_URL
+              value: ${HE_EVALUATE_API_URL}
+            - name: HE_EVALUATE_API_BACKEND
+              value: ${HE_EVALUATE_API_BACKEND}
+            - name: HE_EVALUATE_API_RUN_ID
+              value: ${HE_EVALUATE_API_RUN_ID}
+            - name: HE_EVALUATE_API_ARTIFACT_DIR
+              value: /he-artifacts
+            - name: HE_EVALUATE_API_TIMEOUT_SECONDS
+              value: "${HE_EVALUATE_API_REQUEST_TIMEOUT_SECONDS}"
+            - name: HE_EVALUATE_API_TOLERANCE
+              value: "${HE_EVALUATE_API_TOLERANCE}"
+          resources:
+            requests:
+              cpu: "${HE_EVALUATE_API_REQUEST_CPU}"
+              memory: ${HE_EVALUATE_API_REQUEST_MEMORY}
+            limits:
+              cpu: "${HE_EVALUATE_API_LIMIT_CPU}"
+              memory: ${HE_EVALUATE_API_LIMIT_MEMORY}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: test-code
+              mountPath: /evaluate-tests
+              readOnly: true
+            - name: encrypted-artifacts
+              mountPath: /he-artifacts
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: test-code
+          configMap:
+            name: he-evaluate-api-test-code
+        - name: encrypted-artifacts
+          persistentVolumeClaim:
+            claimName: ${HE_EVALUATE_API_PVC}
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: ${HE_EVALUATE_API_TMP_STORAGE}

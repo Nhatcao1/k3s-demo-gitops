@@ -27,6 +27,8 @@ for template in \
   "$repo_dir/k8s/he-comparison-data-job.yaml" \
   "$repo_dir/k8s/he-comparison-job.yaml" \
   "$repo_dir/k8s/he-multiply-range-job.yaml" \
+  "$repo_dir/k8s/evaluate-api-pvc.yaml" \
+  "$repo_dir/k8s/evaluate-api-test-job.yaml" \
   "$repo_dir/k8s/sum-benchmark-job.yaml"; do
   test -f "$template"
 done
@@ -41,6 +43,13 @@ test -f "$repo_dir/scripts/benchmark/compare/extract_result.py"
 test -x "$repo_dir/scripts/benchmark/multiply-range/run.sh"
 test -f "$repo_dir/scripts/benchmark/multiply-range/multiply_range.py"
 test -f "$repo_dir/scripts/benchmark/multiply-range/extract_result.py"
+test -x "$repo_dir/scripts/evaluate-api/setup.sh"
+test -x "$repo_dir/scripts/evaluate-api/run-operation.sh"
+test -x "$repo_dir/scripts/evaluate-api/run-all.sh"
+for operation in add subtract multiply square sum mean variance; do
+  test -x "$repo_dir/scripts/evaluate-api/$operation.sh"
+  test -x "$repo_dir/scripts/evaluate-api/test_$operation.py"
+done
 
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
@@ -61,6 +70,12 @@ export HE_COMPARE_DATA_TMP_STORAGE HE_COMPARE_JOB_TTL_SECONDS
 export HE_MULTIPLY_RANGE_REQUEST_CPU HE_MULTIPLY_RANGE_REQUEST_MEMORY
 export HE_MULTIPLY_RANGE_LIMIT_CPU HE_MULTIPLY_RANGE_LIMIT_MEMORY
 export HE_MULTIPLY_RANGE_TMP_STORAGE
+export HE_EVALUATE_API_PVC HE_EVALUATE_API_STORAGE
+export HE_EVALUATE_API_REQUEST_CPU HE_EVALUATE_API_REQUEST_MEMORY
+export HE_EVALUATE_API_LIMIT_CPU HE_EVALUATE_API_LIMIT_MEMORY
+export HE_EVALUATE_API_TMP_STORAGE HE_EVALUATE_API_JOB_TTL_SECONDS
+export HE_EVALUATE_API_JOB_TIMEOUT_SECONDS
+export HE_EVALUATE_API_REQUEST_TIMEOUT_SECONDS HE_EVALUATE_API_TOLERANCE
 export HE_NORMAL_DATA_PVC HE_NORMAL_DATA_STORAGE
 export HE_STRESS_DATA_PVC HE_STRESS_DATA_STORAGE
 
@@ -117,6 +132,16 @@ export HE_MULTIPLY_RANGE_JOB_NAME HE_MULTIPLY_RANGE_CLIENT_IMAGE
 export HE_MULTIPLY_RANGE_CPU_URL HE_MULTIPLY_RANGE_GPU_URL
 export HE_MULTIPLY_RANGE_JOB_TIMEOUT_SECONDS
 
+HE_EVALUATE_API_JOB_NAME=he-evaluate-cpu-add-validation
+HE_EVALUATE_API_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
+HE_EVALUATE_API_OPERATION=add
+HE_EVALUATE_API_BACKEND=cpu
+HE_EVALUATE_API_RUN_ID=validation
+HE_EVALUATE_API_URL="http://${HE_CPU_SERVICE}:${HE_SERVICE_PORT}"
+export HE_EVALUATE_API_JOB_NAME HE_EVALUATE_API_CLIENT_IMAGE
+export HE_EVALUATE_API_OPERATION HE_EVALUATE_API_BACKEND
+export HE_EVALUATE_API_RUN_ID HE_EVALUATE_API_URL
+
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/cpu-evaluator.yaml" > "$render_dir/cpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
@@ -136,6 +161,10 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/he-multiply-range-job.yaml" > "$render_dir/he-multiply-range.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/evaluate-api-pvc.yaml" > "$render_dir/evaluate-api-pvc.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/evaluate-api-test-job.yaml" > "$render_dir/evaluate-api-job.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sum-benchmark-job.yaml" > "$render_dir/sum-benchmark.yaml"
 
 for rendered in \
@@ -148,6 +177,8 @@ for rendered in \
   "$render_dir/he-comparison-data-job.yaml" \
   "$render_dir/he-comparison.yaml" \
   "$render_dir/he-multiply-range.yaml" \
+  "$render_dir/evaluate-api-pvc.yaml" \
+  "$render_dir/evaluate-api-job.yaml" \
   "$render_dir/sum-benchmark.yaml"; do
   if grep -q '\${' "$rendered"; then
     echo "Unrendered placeholder in $rendered" >&2
@@ -202,6 +233,13 @@ grep -q "name: $HE_MULTIPLY_RANGE_JOB_NAME" "$render_dir/he-multiply-range.yaml"
 grep -q "image: $HE_MULTIPLY_RANGE_CLIENT_IMAGE" "$render_dir/he-multiply-range.yaml"
 grep -q "memory: $HE_MULTIPLY_RANGE_LIMIT_MEMORY" "$render_dir/he-multiply-range.yaml"
 grep -q "sizeLimit: $HE_MULTIPLY_RANGE_TMP_STORAGE" "$render_dir/he-multiply-range.yaml"
+grep -q "name: $HE_EVALUATE_API_PVC" "$render_dir/evaluate-api-pvc.yaml"
+grep -q "storage: $HE_EVALUATE_API_STORAGE" "$render_dir/evaluate-api-pvc.yaml"
+grep -q "name: $HE_EVALUATE_API_JOB_NAME" "$render_dir/evaluate-api-job.yaml"
+grep -q "image: $HE_EVALUATE_API_CLIENT_IMAGE" "$render_dir/evaluate-api-job.yaml"
+grep -q "claimName: $HE_EVALUATE_API_PVC" "$render_dir/evaluate-api-job.yaml"
+grep -q "memory: $HE_EVALUATE_API_LIMIT_MEMORY" "$render_dir/evaluate-api-job.yaml"
+grep -q "app: $HE_CPU_DEPLOYMENT" "$render_dir/evaluate-api-job.yaml"
 grep -q "name: $SUM_BENCH_JOB_NAME" "$render_dir/sum-benchmark.yaml"
 grep -q "image: $SUM_BENCH_CLIENT_IMAGE" "$render_dir/sum-benchmark.yaml"
 grep -q "memory: $HE_SUM_BENCH_LIMIT_MEMORY" "$render_dir/sum-benchmark.yaml"
