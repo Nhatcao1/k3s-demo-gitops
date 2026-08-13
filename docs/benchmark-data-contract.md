@@ -59,10 +59,10 @@ is the fallback when the launching shell disappears.
 ## Result files
 
 ```text
-benchmark_runs/compare/<UTC-time>/summary.csv
-benchmark_runs/compare/<UTC-time>/result.json
-benchmark_runs/compare/<UTC-time>/job.log
-benchmark_runs/compare/<UTC-time>/failures.csv  # present after a failed limit
+benchmark_runs/compare/<operations>/<UTC-time>/summary.csv
+benchmark_runs/compare/<operations>/<UTC-time>/result.json
+benchmark_runs/compare/<operations>/<UTC-time>/job.log
+benchmark_runs/compare/<operations>/<UTC-time>/failures.csv  # on failure
 ```
 
 `summary.csv` contains one row per profile, size, operation, and backend. Its

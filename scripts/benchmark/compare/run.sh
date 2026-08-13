@@ -21,7 +21,42 @@ client_image_override=${HE_COMPARE_IMAGE:-}
 job_timeout=${BENCH_JOB_TIMEOUT_SECONDS:-43200}
 run_id=${RUN_ID:-"$(date -u +%Y%m%d%H%M%S)"}
 job_name="he-operation-comparison-$run_id"
-output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/compare/$run_id"}
+
+operation_label=""
+reading_operations=false
+for argument in "$@"; do
+  case "$argument" in
+    --operations)
+      reading_operations=true
+      continue
+      ;;
+    --operations=*)
+      reading_operations=false
+      operation=${argument#--operations=}
+      ;;
+    --*)
+      reading_operations=false
+      continue
+      ;;
+    *)
+      if [ "$reading_operations" != "true" ]; then
+        continue
+      fi
+      operation=$argument
+      ;;
+  esac
+  case "$operation" in
+    all|add|subtract|multiply|square|sum|mean|variance) ;;
+    *) echo "Unsupported operation: $operation" >&2; exit 2 ;;
+  esac
+  if [ -n "$operation_label" ]; then
+    operation_label="$operation_label-$operation"
+  else
+    operation_label=$operation
+  fi
+done
+operation_label=${operation_label:-all}
+output_dir=${OUTPUT_DIR:-"$repo_dir/benchmark_runs/compare/$operation_label/$run_id"}
 template="$repo_dir/k8s/he-comparison-job.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
 
@@ -52,6 +87,7 @@ gzip -c "$script_dir/compare_operations.py" > "$code_archive"
 gzip -c "$script_dir/data_profiles.py" > "$profiles_archive"
 
 echo "Comparison namespace: $namespace"
+echo "Comparison operations: $operation_label"
 echo "Comparison data PVC ($HE_COMPARE_DATA_PROFILE_GROUP): $HE_COMPARE_DATA_PVC"
 he_kubectl -n "$namespace" get "deployment/$HE_CPU_DEPLOYMENT" >/dev/null
 he_kubectl -n "$namespace" get "deployment/$HE_GPU_DEPLOYMENT" >/dev/null

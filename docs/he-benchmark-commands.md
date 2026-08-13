@@ -242,11 +242,14 @@ variance remain per 4096-value chunk.
 ## Results
 
 ```text
-benchmark_runs/compare/<UTC-time>/summary.csv
-benchmark_runs/compare/<UTC-time>/result.json
-benchmark_runs/compare/<UTC-time>/job.log
-benchmark_runs/compare/<UTC-time>/failures.csv  # only when a limit is hit
+benchmark_runs/compare/<operations>/<UTC-time>/summary.csv
+benchmark_runs/compare/<operations>/<UTC-time>/result.json
+benchmark_runs/compare/<operations>/<UTC-time>/job.log
+benchmark_runs/compare/<operations>/<UTC-time>/failures.csv  # only on failure
 ```
+
+`<operations>` reflects the command, for example `sum`, `square`, `add`, or
+`add-square`. The default is `all`.
 
 `summary.csv` has one row per profile, size, operation, and backend. Important
 timings are:
