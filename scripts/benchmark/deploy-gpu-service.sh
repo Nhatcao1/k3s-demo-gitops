@@ -63,14 +63,20 @@ he_kubectl apply -f "$rendered_yaml"
 
 if ! he_kubectl -n "$namespace" rollout status "deployment/$deployment" \
   --timeout=15m; then
-  echo "GPU rollout failed; pod status and startup logs follow:" >&2
+  echo "GPU rollout failed for image $image; diagnostics follow:" >&2
   he_kubectl -n "$namespace" get pods -l "app=$deployment" -o wide || true
+  he_kubectl -n "$namespace" describe pods -l "app=$deployment" || true
   he_kubectl -n "$namespace" logs -l "app=$deployment" \
     --all-containers=true --prefix=true --tail=200 || true
+  he_kubectl -n "$namespace" get events \
+    --field-selector "involvedObject.kind=Pod" \
+    --sort-by='.lastTimestamp' || true
   exit 1
 fi
 
 he_kubectl -n "$namespace" logs -l "app=$deployment" \
   --all-containers=true --prefix=true --tail=20 || true
+he_kubectl -n "$namespace" get pods -l "app=$deployment" \
+  -o custom-columns='POD:.metadata.name,IMAGE:.spec.containers[0].image,IMAGE_ID:.status.containerStatuses[0].imageID,NODE:.spec.nodeName'
 
 echo "GPU evaluator: http://$service:$HE_SERVICE_PORT"

@@ -20,6 +20,7 @@ command -v python3 >/dev/null 2>&1 || {
 for template in \
   "$repo_dir/k8s/cpu-evaluator.yaml" \
   "$repo_dir/k8s/gpu-evaluator.yaml" \
+  "$repo_dir/k8s/sdk-smoke-job.yaml" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" \
   "$repo_dir/k8s/benchmark-job.yaml" \
@@ -34,6 +35,8 @@ for template in \
 done
 test -f "$repo_dir/scripts/render-he-yaml.py"
 test -f "$repo_dir/scripts/lib/benchmark-jobs.sh"
+test -f "$repo_dir/scripts/sdk/test_sdk.py"
+test -x "$repo_dir/scripts/sdk/run-smoke.sh"
 test -x "$repo_dir/scripts/benchmark/compare/run.sh"
 test -x "$repo_dir/scripts/benchmark/compare/prepare-data.sh"
 test -f "$repo_dir/scripts/benchmark/compare/compare_operations.py"
@@ -60,6 +63,10 @@ export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
 export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
 export HE_BENCH_REQUEST_CPU HE_BENCH_REQUEST_MEMORY HE_BENCH_LIMIT_CPU
 export HE_BENCH_LIMIT_MEMORY HE_BENCH_TMP_STORAGE
+export HE_SDK_SMOKE_JOB HE_SDK_SMOKE_TIMEOUT_SECONDS HE_SDK_SMOKE_TTL_SECONDS
+export HE_SDK_SMOKE_REQUEST_CPU HE_SDK_SMOKE_REQUEST_MEMORY
+export HE_SDK_SMOKE_LIMIT_CPU HE_SDK_SMOKE_LIMIT_MEMORY
+export HE_SDK_SMOKE_TMP_STORAGE
 export HE_SUM_BENCH_REQUEST_CPU HE_SUM_BENCH_REQUEST_MEMORY
 export HE_SUM_BENCH_LIMIT_CPU HE_SUM_BENCH_LIMIT_MEMORY
 export HE_SUM_BENCH_TMP_STORAGE
@@ -102,6 +109,9 @@ BENCH_JOB_TIMEOUT_SECONDS=43200
 export BENCH_JOB_NAME BENCH_BACKEND BENCH_WORKLOAD BENCH_CLIENT_IMAGE
 export BENCH_SERVICE_URL BENCH_VALUE_COUNT BENCH_BATCH_SIZE BENCH_REPETITIONS
 export BENCH_REQUEST_TIMEOUT_SECONDS BENCH_JOB_TIMEOUT_SECONDS
+
+HE_SDK_SMOKE_IMAGE=$HE_CPU_IMAGE
+export HE_SDK_SMOKE_IMAGE
 
 SUM_BENCH_JOB_NAME=he-sum-benchmark-validation
 SUM_BENCH_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
@@ -148,6 +158,8 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/gpu-evaluator.yaml" > "$render_dir/gpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/sdk-smoke-job.yaml" > "$render_dir/sdk-smoke.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" > "$render_dir/fides-simple.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" > "$render_dir/fides-serial.yaml"
@@ -171,6 +183,7 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 for rendered in \
   "$render_dir/cpu.yaml" \
   "$render_dir/gpu.yaml" \
+  "$render_dir/sdk-smoke.yaml" \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
   "$render_dir/benchmark.yaml" \
@@ -204,6 +217,12 @@ grep -q 'nodeSelector:' "$render_dir/gpu.yaml"
 grep -q 'runtimeClassName: nvidia' "$render_dir/gpu.yaml"
 grep -q 'kubernetes.io/hostname: hht-k8s-staging-22' "$render_dir/gpu.yaml"
 grep -q 'value: T4' "$render_dir/gpu.yaml"
+grep -q "name: $HE_SDK_SMOKE_JOB" "$render_dir/sdk-smoke.yaml"
+grep -q "image: $HE_SDK_SMOKE_IMAGE" "$render_dir/sdk-smoke.yaml"
+grep -q '/opt/he-sdk-wheel/he_looming_sdk-.*\.whl' "$render_dir/sdk-smoke.yaml"
+grep -q 'sha256sum -c SHA256SUMS' "$render_dir/sdk-smoke.yaml"
+grep -q 'python -m he_sdk.smoke' "$render_dir/sdk-smoke.yaml"
+grep -q "memory: $HE_SDK_SMOKE_LIMIT_MEMORY" "$render_dir/sdk-smoke.yaml"
 grep -q 'name: he-fides-simple' "$render_dir/fides-simple.yaml"
 grep -q 'command:' "$render_dir/fides-simple.yaml"
 grep -q '/usr/local/bin/fides-simple' "$render_dir/fides-simple.yaml"

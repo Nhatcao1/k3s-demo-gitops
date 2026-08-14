@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${HE_SDK_SMOKE_JOB}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-sdk-smoke
+    backend: openfhe
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: ${HE_SDK_SMOKE_TIMEOUT_SECONDS}
+  ttlSecondsAfterFinished: ${HE_SDK_SMOKE_TTL_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-sdk-smoke
+        backend: openfhe
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: sdk-client
+          image: ${HE_SDK_SMOKE_IMAGE}
+          imagePullPolicy: Always
+          workingDir: /tmp
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              cd /opt/he-sdk-wheel
+              sha256sum -c SHA256SUMS
+              set -- /opt/he-sdk-wheel/he_looming_sdk-*.whl
+              test -f "$1"
+              test "$#" -eq 1
+              python -m pip install \
+                --disable-pip-version-check \
+                --no-cache-dir \
+                --no-deps \
+                --target /tmp/sdk-site \
+                "$1"
+              PYTHONPATH=/tmp/sdk-site python -m he_sdk.smoke
+          resources:
+            requests:
+              cpu: "${HE_SDK_SMOKE_REQUEST_CPU}"
+              memory: ${HE_SDK_SMOKE_REQUEST_MEMORY}
+            limits:
+              cpu: "${HE_SDK_SMOKE_LIMIT_CPU}"
+              memory: ${HE_SDK_SMOKE_LIMIT_MEMORY}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: ${HE_SDK_SMOKE_TMP_STORAGE}

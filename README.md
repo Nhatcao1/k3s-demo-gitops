@@ -21,6 +21,7 @@ scripts/benchmark/      prepare, run, and direct-deployment helpers
 scripts/argocd/         paused repository, registry, bootstrap, promotion helpers
 config/he-lab.env       namespace, images, services, and URLs
 k8s/                    renderable CPU/GPU and benchmark YAML templates
+scripts/sdk/            installable-wheel smoke test on K3s
 jobs/                   simple non-benchmark CPU/GPU submission Jobs
 docs/                   benchmark and K3s command runbooks
 ```
@@ -68,6 +69,32 @@ for in-cluster clients.
 
 Full commands, verification, and optional Traefik access are in
 [docs/k3s-direct-deployment.md](docs/k3s-direct-deployment.md).
+
+## Install and test the SDK wheel
+
+The immutable CPU image also contains the CI-built wheel. Test that wheel as a
+normal Python library first:
+
+```sh
+python scripts/sdk/test_sdk.py
+```
+
+The selected Python environment must already contain the SDK wheel and its
+pinned OpenFHE dependency. The container-based command that requires no host
+OpenFHE installation is documented in
+[`docs/he-sdk-smoke.md`](docs/he-sdk-smoke.md).
+
+After that passes, test it inside K3s independently from the HTTP evaluator
+Service:
+
+```sh
+./scripts/sdk/run-smoke.sh cpu-<app-build-short-sha>
+```
+
+The Job installs `/opt/he-sdk-wheel/he_looming_sdk-*.whl` into a temporary `emptyDir`
+and executes all seven OpenFHE SDK functions. No CUDA, compiler, OpenFHE build,
+or package download is required on the K3s host. See
+[`docs/he-sdk-smoke.md`](docs/he-sdk-smoke.md).
 
 ## Benchmarks
 
