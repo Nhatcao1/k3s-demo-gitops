@@ -22,6 +22,7 @@ scripts/argocd/         paused repository, registry, bootstrap, promotion helper
 config/he-lab.env       namespace, images, services, and URLs
 k8s/                    renderable CPU/GPU and benchmark YAML templates
 scripts/sdk/            installable-wheel smoke test on K3s
+scripts/notebook/       deploy and privately open the JupyterLab playground
 jobs/                   simple non-benchmark CPU/GPU submission Jobs
 docs/                   benchmark and K3s command runbooks
 ```
@@ -71,6 +72,19 @@ Full commands, verification, and optional Traefik access are in
 [docs/k3s-direct-deployment.md](docs/k3s-direct-deployment.md).
 
 ## Install and test the SDK wheel
+
+For the simplest interactive path on the server, let CI build the JupyterLab
+image and deploy it to K3s:
+
+```sh
+./scripts/notebook/deploy.sh notebook-<app-build-short-sha>
+./scripts/notebook/open.sh
+```
+
+The notebook executes the SDK directly in Python/OpenFHE and does not call
+PostgreSQL, HTTP evaluators, or GPU workers. The full guide is in
+[`docs/he-notebook-playground.md`](docs/he-notebook-playground.md); the tracked
+source notebook is [`notebooks/he_playground.ipynb`](notebooks/he_playground.ipynb).
 
 The immutable CPU image also contains the CI-built wheel. Test that wheel as a
 normal Python library first:

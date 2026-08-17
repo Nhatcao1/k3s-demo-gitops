@@ -20,6 +20,7 @@ command -v python3 >/dev/null 2>&1 || {
 for template in \
   "$repo_dir/k8s/cpu-evaluator.yaml" \
   "$repo_dir/k8s/gpu-evaluator.yaml" \
+  "$repo_dir/k8s/he-notebook.yaml" \
   "$repo_dir/k8s/sdk-smoke-job.yaml" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" \
@@ -36,6 +37,9 @@ done
 test -f "$repo_dir/scripts/render-he-yaml.py"
 test -f "$repo_dir/scripts/lib/benchmark-jobs.sh"
 test -f "$repo_dir/scripts/sdk/test_sdk.py"
+test -f "$repo_dir/notebooks/he_playground.ipynb"
+test -x "$repo_dir/scripts/notebook/deploy.sh"
+test -x "$repo_dir/scripts/notebook/open.sh"
 test -x "$repo_dir/scripts/sdk/run-smoke.sh"
 test -x "$repo_dir/scripts/benchmark/compare/run.sh"
 test -x "$repo_dir/scripts/benchmark/compare/prepare-data.sh"
@@ -58,6 +62,11 @@ done
 export HE_NAMESPACE HE_CPU_IMAGE HE_GPU_IMAGE HE_FIDES_EXAMPLES_IMAGE
 export HE_CPU_DEPLOYMENT HE_GPU_DEPLOYMENT HE_CPU_SERVICE HE_GPU_SERVICE
 export HE_SERVICE_PORT
+export HE_NOTEBOOK_IMAGE HE_NOTEBOOK_DEPLOYMENT HE_NOTEBOOK_SERVICE
+export HE_NOTEBOOK_PVC HE_NOTEBOOK_CONFIGMAP HE_NOTEBOOK_SECRET
+export HE_NOTEBOOK_PORT HE_NOTEBOOK_STORAGE HE_NOTEBOOK_REQUEST_CPU
+export HE_NOTEBOOK_REQUEST_MEMORY HE_NOTEBOOK_LIMIT_CPU
+export HE_NOTEBOOK_LIMIT_MEMORY
 export HE_CPU_REQUEST_CPU HE_CPU_REQUEST_MEMORY HE_CPU_LIMIT_CPU
 export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
 export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
@@ -158,6 +167,8 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/gpu-evaluator.yaml" > "$render_dir/gpu.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-notebook.yaml" > "$render_dir/notebook.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sdk-smoke-job.yaml" > "$render_dir/sdk-smoke.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" > "$render_dir/fides-simple.yaml"
@@ -183,6 +194,7 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 for rendered in \
   "$render_dir/cpu.yaml" \
   "$render_dir/gpu.yaml" \
+  "$render_dir/notebook.yaml" \
   "$render_dir/sdk-smoke.yaml" \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
@@ -217,6 +229,13 @@ grep -q 'nodeSelector:' "$render_dir/gpu.yaml"
 grep -q 'runtimeClassName: nvidia' "$render_dir/gpu.yaml"
 grep -q 'kubernetes.io/hostname: hht-k8s-staging-22' "$render_dir/gpu.yaml"
 grep -q 'value: T4' "$render_dir/gpu.yaml"
+grep -q "name: $HE_NOTEBOOK_DEPLOYMENT" "$render_dir/notebook.yaml"
+grep -q "image: $HE_NOTEBOOK_IMAGE" "$render_dir/notebook.yaml"
+grep -q "claimName: $HE_NOTEBOOK_PVC" "$render_dir/notebook.yaml"
+grep -q "name: $HE_NOTEBOOK_CONFIGMAP" "$render_dir/notebook.yaml"
+grep -q "name: $HE_NOTEBOOK_SECRET" "$render_dir/notebook.yaml"
+grep -q 'type: ClusterIP' "$render_dir/notebook.yaml"
+grep -q 'automountServiceAccountToken: false' "$render_dir/notebook.yaml"
 grep -q "name: $HE_SDK_SMOKE_JOB" "$render_dir/sdk-smoke.yaml"
 grep -q "image: $HE_SDK_SMOKE_IMAGE" "$render_dir/sdk-smoke.yaml"
 grep -q '/opt/he-sdk-wheel/he_looming_sdk-.*\.whl' "$render_dir/sdk-smoke.yaml"
