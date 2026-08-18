@@ -117,8 +117,7 @@ spec:
             - name: database
               mountPath: /var/lib/postgresql/data
             - name: schema
-              mountPath: /docker-entrypoint-initdb.d/001_he_store.sql
-              subPath: 001_he_store.sql
+              mountPath: /docker-entrypoint-initdb.d
               readOnly: true
       volumes:
         - name: database

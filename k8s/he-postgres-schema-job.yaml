@@ -31,11 +31,14 @@ spec:
                 -U "$PGUSER" -d "$PGDATABASE"; do
                 sleep 2
               done
-              psql --set=ON_ERROR_STOP=1 --file=/schema/001_he_store.sql
+              for migration in /schema/*.sql; do
+                echo "Applying $migration"
+                psql --set=ON_ERROR_STOP=1 --file="$migration"
+              done
               table_count=$(psql --tuples-only --no-align --set=ON_ERROR_STOP=1 \
-                --command="SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'he_store' AND tablename IN ('runs', 'artifacts')")
-              test "$table_count" = "2"
-              echo "Schema ready: he_store.runs, he_store.artifacts"
+                --command="SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'he_store' AND tablename IN ('runs', 'artifacts', 'artifact_sets', 'ciphertext_chunks')")
+              test "$table_count" = "4"
+              echo "Schema ready: runs, artifacts, artifact_sets, ciphertext_chunks"
           env:
             - name: PGHOST
               value: ${HE_POSTGRES_SERVICE}

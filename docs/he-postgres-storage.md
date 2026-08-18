@@ -81,8 +81,12 @@ Current tables:
 - `he_store.runs`: execution state and HE metadata.
 - `he_store.artifacts`: ciphertext, context, public key, evaluation key, and
   manifest bytes.
+- `he_store.artifact_sets`: one logical encrypted vector/scalar and its chunk
+  contract.
+- `he_store.ciphertext_chunks`: ordered independently serialized ciphertexts
+  belonging to an artifact set.
 
 The deployment copy of the schema is
-`postgres/schema/001_he_store.sql`. Keep it synchronized with the canonical
-application schema in `k3s-demo-app/postgres/init/001_he_store.sql` until the
-SDK gains a proper migration package.
+`postgres/schema/001_he_store.sql` and `002_ciphertext_chunks.sql`. Keep them
+synchronized with the canonical application migrations in
+`k3s-demo-app/postgres/init/` until the SDK gains a proper migration package.

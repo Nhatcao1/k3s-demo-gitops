@@ -24,7 +24,7 @@ case "$HE_POSTGRES_USER" in
     ;;
 esac
 
-schema_file="$repo_dir/postgres/schema/001_he_store.sql"
+schema_dir="$repo_dir/postgres/schema"
 postgres_template="$repo_dir/k8s/he-postgres.yaml"
 schema_job_template="$repo_dir/k8s/he-postgres-schema-job.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
@@ -51,7 +51,7 @@ else
 fi
 
 he_kubectl -n "$HE_NAMESPACE" create configmap "$HE_POSTGRES_SCHEMA_CONFIGMAP" \
-  --from-file="001_he_store.sql=$schema_file" \
+  --from-file="$schema_dir" \
   --dry-run=client -o yaml > "$configmap_yaml"
 he_kubectl apply -f "$configmap_yaml" >/dev/null
 
