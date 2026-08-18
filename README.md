@@ -23,6 +23,7 @@ config/he-lab.env       namespace, images, services, and URLs
 k8s/                    renderable CPU/GPU and benchmark YAML templates
 scripts/sdk/            installable-wheel smoke test on K3s
 scripts/notebook/       deploy and privately open the JupyterLab playground
+scripts/postgres/       deploy, migrate, and privately forward PostgreSQL
 jobs/                   simple non-benchmark CPU/GPU submission Jobs
 docs/                   benchmark and K3s command runbooks
 ```
@@ -109,6 +110,20 @@ The Job installs `/opt/he-sdk-wheel/he_looming_sdk-*.whl` into a temporary `empt
 and executes all seven OpenFHE SDK functions. No CUDA, compiler, OpenFHE build,
 or package download is required on the K3s host. See
 [`docs/he-sdk-smoke.md`](docs/he-sdk-smoke.md).
+
+## PostgreSQL storage
+
+Deploy the CI-built PostgreSQL image with a persistent volume, private
+ClusterIP Service, generated credential Secret, and the current HE schema:
+
+```sh
+./scripts/postgres/deploy.sh
+./scripts/postgres/forward.sh
+```
+
+Schema migrations run on every deployment and preserve existing rows. The SDK
+does not write to PostgreSQL automatically yet. See
+[`docs/he-postgres-storage.md`](docs/he-postgres-storage.md).
 
 ## Benchmarks
 

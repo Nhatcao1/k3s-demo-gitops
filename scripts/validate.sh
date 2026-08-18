@@ -21,6 +21,8 @@ for template in \
   "$repo_dir/k8s/cpu-evaluator.yaml" \
   "$repo_dir/k8s/gpu-evaluator.yaml" \
   "$repo_dir/k8s/he-notebook.yaml" \
+  "$repo_dir/k8s/he-postgres.yaml" \
+  "$repo_dir/k8s/he-postgres-schema-job.yaml" \
   "$repo_dir/k8s/sdk-smoke-job.yaml" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" \
@@ -38,8 +40,11 @@ test -f "$repo_dir/scripts/render-he-yaml.py"
 test -f "$repo_dir/scripts/lib/benchmark-jobs.sh"
 test -f "$repo_dir/scripts/sdk/test_sdk.py"
 test -f "$repo_dir/notebooks/he_playground.ipynb"
+test -f "$repo_dir/postgres/schema/001_he_store.sql"
 test -x "$repo_dir/scripts/notebook/deploy.sh"
 test -x "$repo_dir/scripts/notebook/open.sh"
+test -x "$repo_dir/scripts/postgres/deploy.sh"
+test -x "$repo_dir/scripts/postgres/forward.sh"
 test -x "$repo_dir/scripts/sdk/run-smoke.sh"
 test -x "$repo_dir/scripts/benchmark/compare/run.sh"
 test -x "$repo_dir/scripts/benchmark/compare/prepare-data.sh"
@@ -67,6 +72,11 @@ export HE_NOTEBOOK_PVC HE_NOTEBOOK_CONFIGMAP HE_NOTEBOOK_SECRET
 export HE_NOTEBOOK_PORT HE_NOTEBOOK_STORAGE HE_NOTEBOOK_REQUEST_CPU
 export HE_NOTEBOOK_REQUEST_MEMORY HE_NOTEBOOK_LIMIT_CPU
 export HE_NOTEBOOK_LIMIT_MEMORY
+export HE_POSTGRES_IMAGE HE_POSTGRES_STATEFULSET HE_POSTGRES_SERVICE
+export HE_POSTGRES_PVC HE_POSTGRES_SECRET HE_POSTGRES_SCHEMA_CONFIGMAP
+export HE_POSTGRES_SCHEMA_JOB_PREFIX HE_POSTGRES_PORT HE_POSTGRES_STORAGE
+export HE_POSTGRES_REQUEST_CPU HE_POSTGRES_REQUEST_MEMORY
+export HE_POSTGRES_LIMIT_CPU HE_POSTGRES_LIMIT_MEMORY
 export HE_CPU_REQUEST_CPU HE_CPU_REQUEST_MEMORY HE_CPU_LIMIT_CPU
 export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
 export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
@@ -169,6 +179,10 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/he-notebook.yaml" > "$render_dir/notebook.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-postgres.yaml" > "$render_dir/postgres.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/k8s/he-postgres-schema-job.yaml" > "$render_dir/postgres-schema-job.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sdk-smoke-job.yaml" > "$render_dir/sdk-smoke.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" > "$render_dir/fides-simple.yaml"
@@ -195,6 +209,8 @@ for rendered in \
   "$render_dir/cpu.yaml" \
   "$render_dir/gpu.yaml" \
   "$render_dir/notebook.yaml" \
+  "$render_dir/postgres.yaml" \
+  "$render_dir/postgres-schema-job.yaml" \
   "$render_dir/sdk-smoke.yaml" \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
@@ -236,6 +252,17 @@ grep -q "name: $HE_NOTEBOOK_CONFIGMAP" "$render_dir/notebook.yaml"
 grep -q "name: $HE_NOTEBOOK_SECRET" "$render_dir/notebook.yaml"
 grep -q 'type: ClusterIP' "$render_dir/notebook.yaml"
 grep -q 'automountServiceAccountToken: false' "$render_dir/notebook.yaml"
+grep -q "name: $HE_POSTGRES_STATEFULSET" "$render_dir/postgres.yaml"
+grep -q "image: $HE_POSTGRES_IMAGE" "$render_dir/postgres.yaml"
+grep -q "claimName: $HE_POSTGRES_PVC" "$render_dir/postgres.yaml"
+grep -q "name: $HE_POSTGRES_SECRET" "$render_dir/postgres.yaml"
+grep -q 'type: ClusterIP' "$render_dir/postgres.yaml"
+grep -q "generateName: $HE_POSTGRES_SCHEMA_JOB_PREFIX" "$render_dir/postgres-schema-job.yaml"
+grep -q "name: $HE_POSTGRES_SCHEMA_CONFIGMAP" "$render_dir/postgres-schema-job.yaml"
+grep -q "value: $HE_POSTGRES_SERVICE" "$render_dir/postgres-schema-job.yaml"
+grep -q 'he_store.runs, he_store.artifacts' "$render_dir/postgres-schema-job.yaml"
+grep -q 'CREATE TABLE IF NOT EXISTS he_store.runs' "$repo_dir/postgres/schema/001_he_store.sql"
+grep -q 'CREATE TABLE IF NOT EXISTS he_store.artifacts' "$repo_dir/postgres/schema/001_he_store.sql"
 grep -q "name: $HE_SDK_SMOKE_JOB" "$render_dir/sdk-smoke.yaml"
 grep -q "image: $HE_SDK_SMOKE_IMAGE" "$render_dir/sdk-smoke.yaml"
 grep -q '/opt/he-sdk-wheel/he_looming_sdk-.*\.whl' "$render_dir/sdk-smoke.yaml"

@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: ${HE_POSTGRES_SCHEMA_JOB_PREFIX}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: he-postgres-schema
+    app.kubernetes.io/part-of: he-sdk-storage
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: he-postgres-schema
+        app.kubernetes.io/part-of: he-sdk-storage
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: ${HE_POSTGRES_IMAGE}
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -ec
+          args:
+            - |
+              until pg_isready -h "$PGHOST" -p "$PGPORT" \
+                -U "$PGUSER" -d "$PGDATABASE"; do
+                sleep 2
+              done
+              psql --set=ON_ERROR_STOP=1 --file=/schema/001_he_store.sql
+              table_count=$(psql --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+                --command="SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'he_store' AND tablename IN ('runs', 'artifacts')")
+              test "$table_count" = "2"
+              echo "Schema ready: he_store.runs, he_store.artifacts"
+          env:
+            - name: PGHOST
+              value: ${HE_POSTGRES_SERVICE}
+            - name: PGPORT
+              value: "${HE_POSTGRES_PORT}"
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_DB
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      volumes:
+        - name: schema
+          configMap:
+            name: ${HE_POSTGRES_SCHEMA_CONFIGMAP}
