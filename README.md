@@ -78,12 +78,13 @@ For the simplest interactive path on the server, let CI build the JupyterLab
 image and deploy it to K3s:
 
 ```sh
-./scripts/notebook/deploy.sh notebook-<app-build-short-sha>
+./scripts/notebook/deploy.sh notebook-gpu-<app-build-short-sha>
 ./scripts/notebook/open.sh
 ```
 
-The notebook executes the SDK directly in Python/OpenFHE and does not call
-PostgreSQL, HTTP evaluators, or GPU workers. The full guide is in
+The notebook executes the SDK directly through FIDES on the assigned T4 and
+does not call PostgreSQL, HTTP evaluators, or batch workers. GitLab builds the
+image without a GPU; Pod startup is the runtime acceptance boundary. The guide is in
 [`docs/he-notebook-playground.md`](docs/he-notebook-playground.md); the tracked
 source notebook is [`notebooks/he_playground.ipynb`](notebooks/he_playground.ipynb).
 

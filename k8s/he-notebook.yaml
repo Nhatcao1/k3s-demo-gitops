@@ -28,6 +28,14 @@ spec:
         app: ${HE_NOTEBOOK_DEPLOYMENT}
     spec:
       automountServiceAccountToken: false
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: ${HE_NOTEBOOK_GPU_NODE_NAME}
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: ${HE_NOTEBOOK_GPU_TAINT_VALUE}
+          effect: NoSchedule
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -63,6 +71,11 @@ spec:
             - -ec
           args:
             - |
+              # This is the runtime acceptance boundary. GitLab compiled the
+              # CUDA image without a GPU; the T4 Pod must prove a real SDK
+              # encrypt/square/decrypt before JupyterLab is exposed. Any
+              # CUDA/FIDES failure terminates the container with no CPU fallback.
+              python -c 'import math; from he_sdk import HESession; he = HESession.create(backend="fides"); observed = he.decrypt(he.square(he.encrypt([2.0]))); he.close(); assert math.isclose(float(observed[0]), 4.0, rel_tol=1e-3, abs_tol=1e-3), observed; print("GPU_NOTEBOOK_PREFLIGHT=PASS", flush=True)'
               exec python -m jupyterlab \
                 --no-browser \
                 --ip=0.0.0.0 \
@@ -71,6 +84,10 @@ spec:
                 --ServerApp.allow_remote_access=True \
                 --IdentityProvider.token="$JUPYTER_TOKEN"
           env:
+            - name: HE_NOTEBOOK_BACKEND
+              value: fides
+            - name: HE_GPU_DEVICE
+              value: "0"
             - name: JUPYTER_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -83,9 +100,11 @@ spec:
             requests:
               cpu: "${HE_NOTEBOOK_REQUEST_CPU}"
               memory: ${HE_NOTEBOOK_REQUEST_MEMORY}
+              nvidia.com/gpu: "${HE_NOTEBOOK_GPU_COUNT}"
             limits:
               cpu: "${HE_NOTEBOOK_LIMIT_CPU}"
               memory: ${HE_NOTEBOOK_LIMIT_MEMORY}
+              nvidia.com/gpu: "${HE_NOTEBOOK_GPU_COUNT}"
           startupProbe:
             tcpSocket:
               port: http

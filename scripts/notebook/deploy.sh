@@ -67,6 +67,8 @@ export HE_NOTEBOOK_SERVICE HE_NOTEBOOK_PVC HE_NOTEBOOK_CONFIGMAP
 export HE_NOTEBOOK_SECRET HE_NOTEBOOK_PORT HE_NOTEBOOK_STORAGE
 export HE_NOTEBOOK_REQUEST_CPU HE_NOTEBOOK_REQUEST_MEMORY
 export HE_NOTEBOOK_LIMIT_CPU HE_NOTEBOOK_LIMIT_MEMORY
+export HE_NOTEBOOK_GPU_COUNT HE_NOTEBOOK_GPU_NODE_NAME
+export HE_NOTEBOOK_GPU_TAINT_VALUE
 
 python3 "$renderer" "$template" > "$rendered_yaml"
 he_kubectl apply -f "$rendered_yaml"
@@ -75,8 +77,21 @@ he_kubectl apply -f "$rendered_yaml"
 # container always writes he_playground.latest.ipynb from the current Git copy.
 he_kubectl -n "$HE_NAMESPACE" rollout restart \
   "deployment/$HE_NOTEBOOK_DEPLOYMENT"
-he_kubectl -n "$HE_NAMESPACE" rollout status \
-  "deployment/$HE_NOTEBOOK_DEPLOYMENT" --timeout=15m
+if ! he_kubectl -n "$HE_NAMESPACE" rollout status \
+  "deployment/$HE_NOTEBOOK_DEPLOYMENT" --timeout=15m; then
+  echo "GPU Notebook rollout failed. Current Pod state:" >&2
+  he_kubectl -n "$HE_NAMESPACE" get pods \
+    -l "app=$HE_NOTEBOOK_DEPLOYMENT" -o wide >&2 || true
+  echo "GPU Notebook startup/preflight log:" >&2
+  he_kubectl -n "$HE_NAMESPACE" logs \
+    "deployment/$HE_NOTEBOOK_DEPLOYMENT" \
+    -c jupyterlab --tail=200 >&2 || true
+  echo "GPU Notebook Pod events and scheduling detail:" >&2
+  he_kubectl -n "$HE_NAMESPACE" describe pods \
+    -l "app=$HE_NOTEBOOK_DEPLOYMENT" >&2 || true
+  exit 1
+fi
 
-echo "Notebook is ready. It remains private behind a ClusterIP Service."
+echo "GPU Notebook is ready and passed its T4 startup preflight."
+echo "It remains private behind a ClusterIP Service."
 echo "Next: ./scripts/notebook/open.sh"
