@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: ${HE_SDK_WORKER_JOB_PREFIX}
+  namespace: ${HE_NAMESPACE}
+  labels:
+    app: he-sdk-worker
+    execution-backend: fides
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: ${HE_SDK_WORKER_TIMEOUT_SECONDS}
+  ttlSecondsAfterFinished: ${HE_SDK_WORKER_TTL_SECONDS}
+  template:
+    metadata:
+      labels:
+        app: he-sdk-worker
+        execution-backend: fides
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: ${HE_GPU_NODE_NAME}
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: ${HE_GPU_TAINT_VALUE}
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: sdk-worker
+          image: ${HE_SDK_WORKER_IMAGE}
+          imagePullPolicy: Always
+          env:
+            - name: HE_RUN_ID
+              value: "${HE_SDK_RUN_ID}"
+            - name: HE_OPERATION
+              value: "${HE_SDK_OPERATION}"
+            - name: HE_LEFT
+              value: "${HE_SDK_LEFT}"
+            - name: HE_RIGHT
+              value: "${HE_SDK_RIGHT}"
+            - name: HE_OUTPUT
+              value: "${HE_SDK_OUTPUT}"
+            - name: HE_EXECUTION_BACKEND
+              value: fides
+            - name: HE_GPU_DEVICE
+              value: "0"
+            - name: HE_GPU_WORKER_TIMEOUT_SECONDS
+              value: "${HE_SDK_WORKER_TIMEOUT_SECONDS}"
+            - name: HE_DB_HOST
+              value: ${HE_POSTGRES_SERVICE}
+            - name: HE_DB_PORT
+              value: "${HE_POSTGRES_PORT}"
+            - name: HE_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_DB
+            - name: HE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_USER
+            - name: HE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${HE_POSTGRES_SECRET}
+                  key: POSTGRES_PASSWORD
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              set -- \
+                --run-id "$HE_RUN_ID" \
+                --operation "$HE_OPERATION" \
+                --left "$HE_LEFT" \
+                --output "$HE_OUTPUT" \
+                --execution-backend "$HE_EXECUTION_BACKEND"
+              if [ "$HE_RIGHT" != "__none__" ]; then
+                set -- "$@" --right "$HE_RIGHT"
+              fi
+              exec python -m he_worker "$@"
+          resources:
+            requests:
+              cpu: "${HE_SDK_GPU_WORKER_REQUEST_CPU}"
+              memory: ${HE_SDK_GPU_WORKER_REQUEST_MEMORY}
+              nvidia.com/gpu: "${HE_GPU_COUNT}"
+            limits:
+              cpu: "${HE_SDK_GPU_WORKER_LIMIT_CPU}"
+              memory: ${HE_SDK_GPU_WORKER_LIMIT_MEMORY}
+              nvidia.com/gpu: "${HE_GPU_COUNT}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: ${HE_SDK_WORKER_TMP_STORAGE}

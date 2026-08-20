@@ -59,6 +59,7 @@ test -x "$repo_dir/scripts/benchmark/sum-range/run.sh"
 test -x "$repo_dir/scripts/evaluate-api/setup.sh"
 test -x "$repo_dir/scripts/evaluate-api/run-operation.sh"
 test -x "$repo_dir/scripts/evaluate-api/run-all.sh"
+test -x "$repo_dir/scripts/sdk/run-workload.sh"
 for operation in add subtract multiply square sum mean variance; do
   test -x "$repo_dir/scripts/evaluate-api/$operation.sh"
   test -x "$repo_dir/scripts/evaluate-api/test_$operation.py"
@@ -80,6 +81,14 @@ export HE_POSTGRES_LIMIT_CPU HE_POSTGRES_LIMIT_MEMORY
 export HE_CPU_REQUEST_CPU HE_CPU_REQUEST_MEMORY HE_CPU_LIMIT_CPU
 export HE_CPU_LIMIT_MEMORY HE_GPU_REQUEST_CPU HE_GPU_REQUEST_MEMORY
 export HE_GPU_LIMIT_CPU HE_GPU_LIMIT_MEMORY HE_GPU_COUNT
+export HE_GPU_NODE_NAME HE_GPU_TAINT_VALUE
+export HE_SDK_CPU_WORKER_IMAGE HE_SDK_GPU_WORKER_IMAGE
+export HE_SDK_WORKER_TIMEOUT_SECONDS
+export HE_SDK_WORKER_TTL_SECONDS HE_SDK_WORKER_TMP_STORAGE
+export HE_SDK_CPU_WORKER_REQUEST_CPU HE_SDK_CPU_WORKER_REQUEST_MEMORY
+export HE_SDK_CPU_WORKER_LIMIT_CPU HE_SDK_CPU_WORKER_LIMIT_MEMORY
+export HE_SDK_GPU_WORKER_REQUEST_CPU HE_SDK_GPU_WORKER_REQUEST_MEMORY
+export HE_SDK_GPU_WORKER_LIMIT_CPU HE_SDK_GPU_WORKER_LIMIT_MEMORY
 export HE_BENCH_REQUEST_CPU HE_BENCH_REQUEST_MEMORY HE_BENCH_LIMIT_CPU
 export HE_BENCH_LIMIT_MEMORY HE_BENCH_TMP_STORAGE
 export HE_SDK_SMOKE_JOB HE_SDK_SMOKE_TIMEOUT_SECONDS HE_SDK_SMOKE_TTL_SECONDS
@@ -131,6 +140,16 @@ export BENCH_REQUEST_TIMEOUT_SECONDS BENCH_JOB_TIMEOUT_SECONDS
 
 HE_SDK_SMOKE_IMAGE=$HE_CPU_IMAGE
 export HE_SDK_SMOKE_IMAGE
+
+HE_SDK_WORKER_IMAGE=$HE_SDK_CPU_WORKER_IMAGE
+HE_SDK_WORKER_JOB_PREFIX=he-sdk-cpu-validation-
+HE_SDK_RUN_ID=42
+HE_SDK_OPERATION=sum
+HE_SDK_LEFT=input
+HE_SDK_RIGHT=__none__
+HE_SDK_OUTPUT=cpu_sum
+export HE_SDK_WORKER_IMAGE HE_SDK_WORKER_JOB_PREFIX HE_SDK_RUN_ID
+export HE_SDK_OPERATION HE_SDK_LEFT HE_SDK_RIGHT HE_SDK_OUTPUT
 
 SUM_BENCH_JOB_NAME=he-sum-benchmark-validation
 SUM_BENCH_CLIENT_IMAGE=$HE_BENCH_CLIENT_IMAGE
@@ -185,6 +204,14 @@ python3 "$repo_dir/scripts/render-he-yaml.py" \
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/k8s/sdk-smoke-job.yaml" > "$render_dir/sdk-smoke.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/jobs/sdk-worker-cpu.yaml" > "$render_dir/sdk-worker-cpu.yaml"
+HE_SDK_WORKER_IMAGE=$HE_SDK_GPU_WORKER_IMAGE
+HE_SDK_WORKER_JOB_PREFIX=he-sdk-gpu-validation-
+HE_SDK_OUTPUT=gpu_sum
+export HE_SDK_WORKER_IMAGE HE_SDK_WORKER_JOB_PREFIX HE_SDK_OUTPUT
+python3 "$repo_dir/scripts/render-he-yaml.py" \
+  "$repo_dir/jobs/sdk-worker-gpu.yaml" > "$render_dir/sdk-worker-gpu.yaml"
+python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/simple-job.yaml" > "$render_dir/fides-simple.yaml"
 python3 "$repo_dir/scripts/render-he-yaml.py" \
   "$repo_dir/fides-examples/k8s/serial-job.yaml" > "$render_dir/fides-serial.yaml"
@@ -212,6 +239,8 @@ for rendered in \
   "$render_dir/postgres.yaml" \
   "$render_dir/postgres-schema-job.yaml" \
   "$render_dir/sdk-smoke.yaml" \
+  "$render_dir/sdk-worker-cpu.yaml" \
+  "$render_dir/sdk-worker-gpu.yaml" \
   "$render_dir/fides-simple.yaml" \
   "$render_dir/fides-serial.yaml" \
   "$render_dir/benchmark.yaml" \
@@ -263,12 +292,24 @@ grep -q "value: $HE_POSTGRES_SERVICE" "$render_dir/postgres-schema-job.yaml"
 grep -q 'he_store.runs, he_store.artifacts' "$render_dir/postgres-schema-job.yaml"
 grep -q 'CREATE TABLE IF NOT EXISTS he_store.runs' "$repo_dir/postgres/schema/001_he_store.sql"
 grep -q 'CREATE TABLE IF NOT EXISTS he_store.artifacts' "$repo_dir/postgres/schema/001_he_store.sql"
+grep -q 'artifacts_run_path_sha256_uidx' "$repo_dir/postgres/schema/001_he_store.sql"
 grep -q "name: $HE_SDK_SMOKE_JOB" "$render_dir/sdk-smoke.yaml"
 grep -q "image: $HE_SDK_SMOKE_IMAGE" "$render_dir/sdk-smoke.yaml"
 grep -q '/opt/he-sdk-wheel/he_looming_sdk-.*\.whl' "$render_dir/sdk-smoke.yaml"
 grep -q 'sha256sum -c SHA256SUMS' "$render_dir/sdk-smoke.yaml"
 grep -q 'python -m he_sdk.smoke' "$render_dir/sdk-smoke.yaml"
 grep -q "memory: $HE_SDK_SMOKE_LIMIT_MEMORY" "$render_dir/sdk-smoke.yaml"
+grep -q "image: $HE_SDK_CPU_WORKER_IMAGE" "$render_dir/sdk-worker-cpu.yaml"
+grep -q 'value: openfhe' "$render_dir/sdk-worker-cpu.yaml"
+grep -q "value: \"$HE_SDK_RUN_ID\"" "$render_dir/sdk-worker-cpu.yaml"
+grep -q "name: $HE_POSTGRES_SECRET" "$render_dir/sdk-worker-cpu.yaml"
+grep -q 'automountServiceAccountToken: false' "$render_dir/sdk-worker-cpu.yaml"
+grep -q "image: $HE_SDK_GPU_WORKER_IMAGE" "$render_dir/sdk-worker-gpu.yaml"
+grep -q 'value: fides' "$render_dir/sdk-worker-gpu.yaml"
+grep -q 'runtimeClassName: nvidia' "$render_dir/sdk-worker-gpu.yaml"
+grep -q "nvidia.com/gpu: \"$HE_GPU_COUNT\"" "$render_dir/sdk-worker-gpu.yaml"
+grep -q "kubernetes.io/hostname: $HE_GPU_NODE_NAME" "$render_dir/sdk-worker-gpu.yaml"
+grep -q "value: $HE_POSTGRES_SERVICE" "$render_dir/sdk-worker-gpu.yaml"
 grep -q 'name: he-fides-simple' "$render_dir/fides-simple.yaml"
 grep -q 'command:' "$render_dir/fides-simple.yaml"
 grep -q '/usr/local/bin/fides-simple' "$render_dir/fides-simple.yaml"
