@@ -61,6 +61,18 @@ The current local FIDES session does not serialize workspaces or perform
 result-release key conversion. Use the separate OpenFHE owner + GPU batch Job
 flow in `docs/he-sdk-workloads.md` when those boundaries are required.
 
+Notebook runtime settings are centralized in `config/he-lab.env`:
+
+```text
+HE_NOTEBOOK_BACKEND=fides
+HE_NOTEBOOK_GPU_DEVICE=0
+HE_NOTEBOOK_WORKSPACE=/workspace/he-sdk-workspace
+```
+
+The manifest exposes the workspace path to Python as `HE_SDK_WORKSPACE`. The
+path is inside the Notebook PVC and survives Pod restarts. Keep database
+passwords and other credentials in Kubernetes Secrets, not in this env file.
+
 The first deployment generates a random token. To provide your own token on
 that first run, use:
 

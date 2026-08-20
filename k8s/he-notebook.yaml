@@ -85,9 +85,11 @@ spec:
                 --IdentityProvider.token="$JUPYTER_TOKEN"
           env:
             - name: HE_NOTEBOOK_BACKEND
-              value: fides
+              value: ${HE_NOTEBOOK_BACKEND}
             - name: HE_GPU_DEVICE
-              value: "0"
+              value: "${HE_NOTEBOOK_GPU_DEVICE}"
+            - name: HE_SDK_WORKSPACE
+              value: ${HE_NOTEBOOK_WORKSPACE}
             - name: JUPYTER_TOKEN
               valueFrom:
                 secretKeyRef:

@@ -71,6 +71,7 @@ export HE_SERVICE_PORT
 export HE_NOTEBOOK_IMAGE HE_NOTEBOOK_DEPLOYMENT HE_NOTEBOOK_SERVICE
 export HE_NOTEBOOK_PVC HE_NOTEBOOK_CONFIGMAP HE_NOTEBOOK_SECRET
 export HE_NOTEBOOK_PORT HE_NOTEBOOK_STORAGE HE_NOTEBOOK_REQUEST_CPU
+export HE_NOTEBOOK_BACKEND HE_NOTEBOOK_GPU_DEVICE HE_NOTEBOOK_WORKSPACE
 export HE_NOTEBOOK_REQUEST_MEMORY HE_NOTEBOOK_LIMIT_CPU
 export HE_NOTEBOOK_LIMIT_MEMORY
 export HE_NOTEBOOK_GPU_COUNT HE_NOTEBOOK_GPU_NODE_NAME
@@ -287,7 +288,9 @@ grep -q 'runtimeClassName: nvidia' "$render_dir/notebook.yaml"
 grep -q "kubernetes.io/hostname: $HE_NOTEBOOK_GPU_NODE_NAME" "$render_dir/notebook.yaml"
 grep -q "value: $HE_NOTEBOOK_GPU_TAINT_VALUE" "$render_dir/notebook.yaml"
 grep -q "nvidia.com/gpu: \"$HE_NOTEBOOK_GPU_COUNT\"" "$render_dir/notebook.yaml"
-grep -q 'value: fides' "$render_dir/notebook.yaml"
+grep -q "value: $HE_NOTEBOOK_BACKEND" "$render_dir/notebook.yaml"
+grep -q "value: \"$HE_NOTEBOOK_GPU_DEVICE\"" "$render_dir/notebook.yaml"
+grep -q "value: $HE_NOTEBOOK_WORKSPACE" "$render_dir/notebook.yaml"
 grep -q 'GPU_NOTEBOOK_PREFLIGHT=PASS' "$render_dir/notebook.yaml"
 grep -q "name: $HE_POSTGRES_STATEFULSET" "$render_dir/postgres.yaml"
 grep -q "image: $HE_POSTGRES_IMAGE" "$render_dir/postgres.yaml"
