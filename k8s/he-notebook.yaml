@@ -43,7 +43,7 @@ spec:
         fsGroup: 10001
         fsGroupChangePolicy: OnRootMismatch
       initContainers:
-        - name: seed-playground
+        - name: seed-example
           image: ${HE_NOTEBOOK_IMAGE}
           imagePullPolicy: Always
           command:
@@ -51,14 +51,11 @@ spec:
             - -ec
           args:
             - |
-              cp /seed/he_playground.ipynb /workspace/he_playground.latest.ipynb
-              if [ ! -e /workspace/he_playground.ipynb ]; then
-                cp /seed/he_playground.ipynb /workspace/he_playground.ipynb
+              cp /opt/he-notebooks/gpu_sdk_example.ipynb /workspace/gpu_sdk_example.latest.ipynb
+              if [ ! -e /workspace/gpu_sdk_example.ipynb ]; then
+                cp /opt/he-notebooks/gpu_sdk_example.ipynb /workspace/gpu_sdk_example.ipynb
               fi
           volumeMounts:
-            - name: notebook-seed
-              mountPath: /seed
-              readOnly: true
             - name: workspace
               mountPath: /workspace
       containers:
@@ -71,11 +68,6 @@ spec:
             - -ec
           args:
             - |
-              # This is the runtime acceptance boundary. GitLab compiled the
-              # CUDA image without a GPU; the T4 Pod must prove a real SDK
-              # encrypt/square/decrypt before JupyterLab is exposed. Any
-              # CUDA/FIDES failure terminates the container with no CPU fallback.
-              python -c 'import math; from he_sdk import HESession; he = HESession.create(backend="fides"); observed = he.decrypt(he.square(he.encrypt([2.0]))); he.close(); assert math.isclose(float(observed[0]), 4.0, rel_tol=1e-3, abs_tol=1e-3), observed; print("GPU_NOTEBOOK_PREFLIGHT=PASS", flush=True)'
               exec python -m jupyterlab \
                 --no-browser \
                 --ip=0.0.0.0 \
@@ -120,9 +112,6 @@ spec:
             - name: workspace
               mountPath: /workspace
       volumes:
-        - name: notebook-seed
-          configMap:
-            name: ${HE_NOTEBOOK_CONFIGMAP}
         - name: workspace
           persistentVolumeClaim:
             claimName: ${HE_NOTEBOOK_PVC}

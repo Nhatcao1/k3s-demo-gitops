@@ -1,162 +1,149 @@
 # HE GPU notebook playground
 
-This is the direct interactive GPU interface for experimenting with the SDK.
-The browser talks to JupyterLab, and Python calls the FIDES backend on the T4
-assigned to the same Pod. PostgreSQL, the evaluator HTTP API, batch workers,
-and Ingress are not part of this path.
+This is the simplest interactive path for using the HE SDK on the Kubernetes
+T4 node. The Notebook Pod runs JupyterLab and calls the FIDES backend directly;
+it does not call PostgreSQL, an evaluator Service, or a batch worker.
 
-```mermaid
-flowchart LR
-    A[Browser] -->|kubectl port-forward + token| B[JupyterLab Service]
-    B --> C[Notebook Pod]
-    C --> D[he_looming_sdk + he-sdk-fides]
-    D --> E[FIDESlib + CUDA T4]
-    E --> F[Encrypted operation]
-    C <--> G[(Workspace PVC)]
+The application image contains the complete matching environment:
+
+```text
+Python 3.12
+JupyterLab
+he_looming_sdk
+he-sdk-fides
+FIDESlib + patched OpenFHE
+CUDA runtime
+gpu_sdk_example.ipynb
 ```
 
-## 1. Build the image in GitLab CI
+The source notebook is maintained in the application repository at:
 
-Push the `k3s-demo-app` feature commit that contains the `sdk-notebook` target
-in `gpu/Dockerfile`. The manual `build-he-notebook-gpu` job uses the wheel from
-`build-sdk-wheel` and publishes:
+```text
+k3s-demo-app/examples/notebooks/gpu_sdk_example.ipynb
+```
+
+GitOps does not maintain another copy. During deployment, the init container
+copies the notebook bundled in the image to the workspace PVC.
+
+## 1. Build the image
+
+In the `k3s-demo-app` GitLab pipeline, enable optional builds and run
+`build-he-notebook-gpu`. The job publishes:
 
 ```text
 docker.io/dockerboi99/he_k8s:notebook-gpu-<short-commit-sha>
 docker.io/dockerboi99/he_k8s:notebook-gpu-latest
 ```
 
-The self-hosted GitLab runner does not need a GPU: it compiles CUDA/FIDESlib and
-packages JupyterLab, the core SDK wheel, and the FIDES plugin wheel. It does not
-create a FIDES session or claim GPU correctness. Wait for the build job to
-succeed, then deploy the immutable `notebook-gpu-<short-commit-sha>` tag. The
-first actual GPU correctness check happens during Pod startup on K3s.
+The CI runner compiles and packages the GPU environment but does not execute a
+GPU operation. Use the immutable commit tag for deployment.
 
 ## 2. Deploy to K3s
 
-Run from the `k3s-demo-gitops` checkout on the server that has working
-`kubectl` access:
+Run from `k3s-demo-gitops` on a host with working `kubectl` access:
 
 ```sh
 git pull --ff-only origin main
+
+export HE_NAMESPACE=datalake-he
+export HE_IMAGE_REPOSITORY=docker.io/dockerboi99/he_k8s
+export HE_NOTEBOOK_GPU_NODE_NAME=hht-k8s-staging-22
+export HE_NOTEBOOK_GPU_TAINT_VALUE=T4
+
 ./scripts/notebook/deploy.sh notebook-gpu-<short-commit-sha>
 ```
 
-The deploy helper creates or updates:
+The script creates or updates:
 
-- one Secret containing the Jupyter access token;
-- one ConfigMap containing the tracked playground notebook;
-- one 2 GiB workspace PVC;
-- one T4-pinned GPU JupyterLab Deployment and one ClusterIP Service.
+- the Jupyter access-token Secret;
+- a 2 GiB workspace PVC;
+- a T4-pinned GPU Deployment;
+- a private ClusterIP Service.
 
-The Pod requests one `nvidia.com/gpu`, uses `runtimeClassName: nvidia`, selects
-the configured GPU node, and tolerates its dedicated T4 taint. Before starting
-JupyterLab, it runs a real `HESession` FIDES
-`encrypt -> square -> decrypt` preflight. A failure stops the container and is
-reported automatically with Pod logs and scheduling events; it never falls
-back to OpenFHE CPU.
-
-This direct playground keeps its trusted FIDES keys in the Notebook process.
-The current local FIDES session does not serialize workspaces or perform
-result-release key conversion. Use the separate OpenFHE owner + GPU batch Job
-flow in `docs/he-sdk-workloads.md` when those boundaries are required.
-
-Notebook runtime settings are centralized in `config/he-lab.env`:
-
-```text
-HE_NOTEBOOK_BACKEND=fides
-HE_NOTEBOOK_GPU_DEVICE=0
-HE_NOTEBOOK_WORKSPACE=/workspace/he-sdk-workspace
-```
-
-The manifest exposes the workspace path to Python as `HE_SDK_WORKSPACE`. The
-path is inside the Notebook PVC and survives Pod restarts. Keep database
-passwords and other credentials in Kubernetes Secrets, not in this env file.
-
-The first deployment generates a random token. To provide your own token on
-that first run, use:
-
-```sh
-HE_NOTEBOOK_TOKEN='<long-random-token>' \
-  ./scripts/notebook/deploy.sh notebook-gpu-<short-commit-sha>
-```
-
-The token is stored only in Kubernetes, not in Git. Later deploys preserve it.
+There is no automatic HE test at Pod startup. The container starts JupyterLab,
+and the user creates the FIDES session by running the example notebook.
 
 ## 3. Open JupyterLab
 
-On the machine where you want the local browser connection, run:
+Keep this command running on the Kubernetes-access host:
 
 ```sh
+export HE_NAMESPACE=datalake-he
 ./scripts/notebook/open.sh
 ```
 
-The script prints a `http://127.0.0.1:18888/lab?token=...` URL and keeps the
-port-forward running. Open that URL and keep the terminal open. The Service is
-not exposed through Ingress or a public `NodePort`.
+It prints a URL containing the token:
 
-If your browser is on a different computer from the K3s server, create an SSH
-tunnel first:
+```text
+http://127.0.0.1:18888/lab?token=...
+```
+
+If the browser is on another computer, create an SSH tunnel from that computer:
 
 ```sh
 ssh -L 18888:127.0.0.1:18888 <user>@<k3s-server>
 ```
 
-Then run `./scripts/notebook/open.sh` on the server and open
-`http://127.0.0.1:18888/lab` on your computer. Paste the printed token if
-Jupyter asks for it.
+Then open `http://127.0.0.1:18888/lab`.
 
-## 4. Use the playground
+## 4. Run the example
 
-Open `he_playground.ipynb` and run cells from top to bottom:
+Open:
 
-1. Import `HESession` and define two small vectors.
-2. Create one FIDES GPU session. Context and key generation may take noticeably
-   longer than a normal Python import.
-3. Run the direct `encrypt -> square -> decrypt` example.
-4. Change `OPERATION` to `add`, `subtract`, `multiply`, `square`, `sum`, `mean`,
-   or `variance` and run that cell again.
-5. Set `RUN_ALL = True` only when you want the full seven-operation check.
-6. Close the session when finished, then shut down the kernel from JupyterLab.
-
-CKKS results are approximate, so the notebook checks numeric tolerance rather
-than exact float equality.
-
-## Persistence and notebook updates
-
-Your editable `he_playground.ipynb` lives on the PVC and survives Pod restarts.
-Every deployment also writes the newest Git version as
-`he_playground.latest.ipynb`. This prevents a GitOps update from overwriting
-your experiments. Copy cells from the latest file when you want to adopt an
-updated template.
-
-## Checks and troubleshooting
-
-```sh
-kubectl -n he-dev get pod,service,pvc | grep he-notebook
-kubectl -n he-dev logs deployment/he-notebook -c jupyterlab --tail=100
-kubectl -n he-dev describe pod -l app=he-notebook
+```text
+gpu_sdk_example.ipynb
 ```
 
-- `ImagePullBackOff`: verify that the CI job published the exact immutable tag.
-- `Pending` PVC: verify that the K3s cluster has a default storage class (the
-  normal K3s `local-path` provisioner is sufficient).
-- Pod `Pending`: confirm the configured T4 node name/taint and that
-  `nvidia.com/gpu` is allocatable.
-- `CrashLoopBackOff`: inspect the JupyterLab container log. A missing driver,
-  CUDA/FIDES mismatch, or failed encrypted preflight is intentionally fatal.
-- Pod not ready: confirm the GPU node has enough CPU and RAM for FIDES context
-  and key generation.
-- Token rejected: delete only `secret/he-notebook-auth` and rerun deploy to
-  generate a new one. Existing notebook files on the PVC are unaffected.
+Run its cells from top to bottom. The notebook performs only straightforward
+SDK calls:
 
-## Stop or remove
+1. import `HESession` and the FIDES plugin;
+2. create one `HESession(backend="fides")`;
+3. encrypt two small vectors;
+4. call add, subtract, multiply, square, sum, mean, and variance;
+5. decrypt and print each result;
+6. close the session.
 
-Stop compute while retaining notebook files:
+There are no benchmarks, helper frameworks, assertions, or package-install
+cells in the notebook.
 
-```sh
-kubectl -n he-dev scale deployment/he-notebook --replicas=0
+## Notebook persistence
+
+On every deployment, the image copy is written to:
+
+```text
+/workspace/gpu_sdk_example.latest.ipynb
 ```
 
-Deleting the PVC permanently deletes saved notebooks, so it is intentionally
-not part of the normal cleanup instructions.
+The editable file is created only when it does not already exist:
+
+```text
+/workspace/gpu_sdk_example.ipynb
+```
+
+This keeps user edits on the PVC while still exposing the newest image version
+as the `.latest.ipynb` file.
+
+## Status and logs
+
+```sh
+kubectl -n datalake-he get pod,service,pvc | grep he-notebook
+kubectl -n datalake-he logs deployment/he-notebook -c jupyterlab --tail=100
+kubectl -n datalake-he describe pod -l app=he-notebook
+```
+
+Common failures:
+
+- `ImagePullBackOff`: the requested immutable image tag was not published.
+- Pod `Pending`: check the T4 node name, taint, and `nvidia.com/gpu` capacity.
+- `CrashLoopBackOff`: inspect the JupyterLab container log.
+- A notebook cell fails when creating the session: inspect CUDA driver and
+  FIDESlib compatibility on the GPU node.
+
+## Stop the notebook
+
+Stop GPU usage while keeping the PVC:
+
+```sh
+kubectl -n datalake-he scale deployment/he-notebook --replicas=0
+```

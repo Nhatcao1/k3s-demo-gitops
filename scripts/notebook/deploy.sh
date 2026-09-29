@@ -36,12 +36,10 @@ command -v python3 >/dev/null 2>&1 || {
   exit 1
 }
 
-notebook_file="$repo_dir/notebooks/he_playground.ipynb"
 template="$repo_dir/k8s/he-notebook.yaml"
 renderer="$repo_dir/scripts/render-he-yaml.py"
 rendered_yaml=$(mktemp)
-configmap_yaml=$(mktemp)
-trap 'rm -f "$rendered_yaml" "$configmap_yaml"' EXIT HUP INT TERM
+trap 'rm -f "$rendered_yaml"' EXIT HUP INT TERM
 
 he_kubectl get namespace "$HE_NAMESPACE" >/dev/null 2>&1 || \
   he_kubectl create namespace "$HE_NAMESPACE"
@@ -56,14 +54,9 @@ if ! he_kubectl -n "$HE_NAMESPACE" get secret "$HE_NOTEBOOK_SECRET" >/dev/null 2
   echo "Created notebook access Secret: $HE_NOTEBOOK_SECRET"
 fi
 
-he_kubectl -n "$HE_NAMESPACE" create configmap "$HE_NOTEBOOK_CONFIGMAP" \
-  --from-file="he_playground.ipynb=$notebook_file" \
-  --dry-run=client -o yaml > "$configmap_yaml"
-he_kubectl apply -f "$configmap_yaml" >/dev/null
-
 HE_NOTEBOOK_IMAGE=$notebook_image
 export HE_NAMESPACE HE_NOTEBOOK_IMAGE HE_NOTEBOOK_DEPLOYMENT
-export HE_NOTEBOOK_SERVICE HE_NOTEBOOK_PVC HE_NOTEBOOK_CONFIGMAP
+export HE_NOTEBOOK_SERVICE HE_NOTEBOOK_PVC
 export HE_NOTEBOOK_SECRET HE_NOTEBOOK_PORT HE_NOTEBOOK_STORAGE
 export HE_NOTEBOOK_BACKEND HE_NOTEBOOK_GPU_DEVICE HE_NOTEBOOK_WORKSPACE
 export HE_NOTEBOOK_REQUEST_CPU HE_NOTEBOOK_REQUEST_MEMORY
@@ -74,8 +67,7 @@ export HE_NOTEBOOK_GPU_TAINT_VALUE
 python3 "$renderer" "$template" > "$rendered_yaml"
 he_kubectl apply -f "$rendered_yaml"
 
-# A ConfigMap update does not change the Pod template. Restart so the init
-# container always writes he_playground.latest.ipynb from the current Git copy.
+# Restart when a moving image tag is reused so the Pod pulls the current image.
 he_kubectl -n "$HE_NAMESPACE" rollout restart \
   "deployment/$HE_NOTEBOOK_DEPLOYMENT"
 if ! he_kubectl -n "$HE_NAMESPACE" rollout status \
@@ -83,7 +75,7 @@ if ! he_kubectl -n "$HE_NAMESPACE" rollout status \
   echo "GPU Notebook rollout failed. Current Pod state:" >&2
   he_kubectl -n "$HE_NAMESPACE" get pods \
     -l "app=$HE_NOTEBOOK_DEPLOYMENT" -o wide >&2 || true
-  echo "GPU Notebook startup/preflight log:" >&2
+  echo "GPU Notebook startup log:" >&2
   he_kubectl -n "$HE_NAMESPACE" logs \
     "deployment/$HE_NOTEBOOK_DEPLOYMENT" \
     -c jupyterlab --tail=200 >&2 || true
@@ -93,6 +85,6 @@ if ! he_kubectl -n "$HE_NAMESPACE" rollout status \
   exit 1
 fi
 
-echo "GPU Notebook is ready and passed its T4 startup preflight."
+echo "GPU Notebook is ready."
 echo "It remains private behind a ClusterIP Service."
 echo "Next: ./scripts/notebook/open.sh"

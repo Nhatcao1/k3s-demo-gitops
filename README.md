@@ -83,10 +83,10 @@ image and deploy it to K3s:
 ```
 
 The notebook executes the SDK directly through FIDES on the assigned T4 and
-does not call PostgreSQL, HTTP evaluators, or batch workers. GitLab builds the
-image without a GPU; Pod startup is the runtime acceptance boundary. The guide is in
-[`docs/he-notebook-playground.md`](docs/he-notebook-playground.md); the tracked
-source notebook is [`notebooks/he_playground.ipynb`](notebooks/he_playground.ipynb).
+does not call PostgreSQL, HTTP evaluators, or batch workers. The application
+image contains the matching `gpu_sdk_example.ipynb`; GitOps copies it to the
+workspace PVC before Jupyter starts. The guide is in
+[`docs/he-notebook-playground.md`](docs/he-notebook-playground.md).
 
 The immutable CPU image also contains the CI-built wheel. Test that wheel as a
 normal Python library first:
