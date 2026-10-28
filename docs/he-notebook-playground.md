@@ -31,7 +31,7 @@ In the `k3s-demo-app` GitLab pipeline, enable optional builds and run
 `build-he-notebook-gpu`. The job publishes:
 
 ```text
-docker.io/dockerboi99/he_k8s:notebook-gpu-<short-commit-sha>
+docker.io/dockerboi99/he_k8s:notebook-gpu-<8-character-commit-sha>
 docker.io/dockerboi99/he_k8s:notebook-gpu-latest
 ```
 
@@ -50,7 +50,7 @@ export HE_IMAGE_REPOSITORY=docker.io/dockerboi99/he_k8s
 export HE_NOTEBOOK_GPU_NODE_NAME=hht-k8s-staging-22
 export HE_NOTEBOOK_GPU_TAINT_VALUE=T4
 
-./scripts/notebook/deploy.sh notebook-gpu-<short-commit-sha>
+./scripts/notebook/deploy.sh notebook-gpu-b3e707ca
 ```
 
 The script creates or updates:
